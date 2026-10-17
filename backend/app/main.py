@@ -20,6 +20,7 @@ from app.api.coordination import router as coord_router
 from app.api.rules_admin import router as admin_router
 from app.api.audit_fhir import router as audit_fhir_router
 from app.api.ws import router as ws_router
+from app.api.prompt7b_router import router as prompt7b_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -60,6 +61,7 @@ app.include_router(coord_router)
 app.include_router(admin_router)
 app.include_router(audit_fhir_router)
 app.include_router(ws_router)
+app.include_router(prompt7b_router)
 
 @app.get("/")
 def root():

@@ -30,10 +30,13 @@ def seed():
 
         # 2. Facilities
         facilities_data = [
-            {"code": "LAB-01", "name": "Demo Central Lab", "type": "LAB", "integration_mode": "FHIR"},
-            {"code": "CLA", "name": "Clinic Alpha (Screening & Primary)", "type": "PRIMARY", "integration_mode": "FHIR"},
-            {"code": "CLB", "name": "Clinic Bravo (Primary Care)", "type": "PRIMARY", "integration_mode": "PORTAL"},
-            {"code": "DEC", "name": "Demo Endocrinology Centre", "type": "SPECIALIST", "integration_mode": "MANUAL"}
+            {"code": "LAB-01", "name": "Demo Central Lab", "type": "LAB", "integration_mode": "FHIR", "capacity_status": "AVAILABLE", "specialties": ["Pathology"], "distance_km": 2.0, "data_freshness": "LIVE"},
+            {"code": "CLA", "name": "Clinic Alpha (Screening & Primary)", "type": "PRIMARY", "integration_mode": "FHIR", "capacity_status": "AVAILABLE", "specialties": ["Primary Care"], "distance_km": 3.5, "data_freshness": "LIVE"},
+            {"code": "CLB", "name": "Clinic Bravo (Primary Care)", "type": "PRIMARY", "integration_mode": "PORTAL", "capacity_status": "AVAILABLE", "specialties": ["Primary Care"], "distance_km": 7.0, "data_freshness": "MANUAL"},
+            {"code": "DEC", "name": "Demo Endocrinology Centre", "type": "SPECIALIST", "integration_mode": "MANUAL", "capacity_status": "FULL", "specialties": ["Endocrinology"], "distance_km": 4.2, "data_freshness": "LIVE"},
+            {"code": "CCAD", "name": "Cleveland Clinic Abu Dhabi - Endocrine", "type": "SPECIALIST", "integration_mode": "FHIR", "capacity_status": "AVAILABLE", "specialties": ["Endocrinology", "Cardiology"], "distance_km": 11.5, "data_freshness": "LIVE"},
+            {"code": "SEHA-AAM", "name": "Sheikh Shakhbout Medical City (SSMC)", "type": "SPECIALIST", "integration_mode": "PORTAL", "capacity_status": "AVAILABLE", "specialties": ["Endocrinology"], "distance_km": 16.8, "data_freshness": "MANUAL"},
+            {"code": "NMC-ZAYED", "name": "Zayed Military Hospital - Endocrine", "type": "SPECIALIST", "integration_mode": "MANUAL", "capacity_status": "HIGH_LOAD", "specialties": ["Endocrinology"], "distance_km": 21.0, "data_freshness": "SIMULATED"}
         ]
         facilities = {}
         for f_dict in facilities_data:
@@ -100,6 +103,12 @@ def seed():
             name = f"Patient {pid}"
             if lang == "Arabic":
                 name = f"مريض {pid}"
+            contact_win = "MORNING_9_12" if i % 3 == 0 else ("AFTERNOON_12_17" if i % 3 == 1 else "EVENING_17_20")
+            access_needs = {
+                "large_text": bool(i % 4 == 0),
+                "audio_notes": bool(i % 6 == 0),
+                "interpreter_needed": bool(lang not in ("Arabic", "English"))
+            }
             patient = PatientIdentity(
                 patient_id=pid,
                 name=name,
@@ -110,7 +119,9 @@ def seed():
                 consent_sms=True,
                 consent_whatsapp=has_smart,
                 consent_voice=True,
-                has_smartphone=has_smart
+                has_smartphone=has_smart,
+                contact_window=contact_win,
+                accessibility_needs=access_needs
             )
             db.add(patient)
             patients.append(patient)
@@ -662,14 +673,19 @@ def seed():
         )
         for idx, (bcode, bnote, bresp) in enumerate(barriers_data):
             case_target_id = f"CASE-{1021 + (idx % 20)}"
+            is_resolved = (idx % 5 != 0) # 80% resolved, 20% unresolved
+            b_ts = now - timedelta(days=15 - (idx % 10))
+            hours_spent = float(12 + (idx % 8) * 4)
             b = Barrier(
                 case_id=case_target_id,
                 code=bcode,
                 note=bnote,
                 response_code=bresp,
                 recorded_by=users["COORD"].id,
-                ts=now - timedelta(days=15 - (idx % 10)),
-                resolved=True
+                ts=b_ts,
+                resolved=is_resolved,
+                resolved_at=(b_ts + timedelta(hours=hours_spent)) if is_resolved else None,
+                resolution_time_hours=hours_spent if is_resolved else None
             )
             db.add(b)
 

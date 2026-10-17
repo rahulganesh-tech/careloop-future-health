@@ -1,0 +1,138 @@
+{
+  "version": "v1.2-2026",
+  "disclaimer": "ILLUSTRATIVE - SIMULATED. Deterministic recovery projections for population health planning only.",
+  "last_updated": "2026-10-18T00:00:00Z",
+  "scenario_templates": {
+    "CRITICAL_UNACK": {
+      "title": "Critical Abnormal Result Unacknowledged (>24h)",
+      "description": "Patient with critical lab breach (e.g. HbA1c > 11.0%) has not opened notification or completed teach-back within 24 hours.",
+      "default_urgency": "CRITICAL",
+      "baseline": {
+        "projected_completion_rate": 35.0,
+        "projected_unresolved_cases": 1,
+        "projected_overdue_tasks": 2,
+        "coordinator_minutes": 45
+      },
+      "candidate_interventions": ["INTERPRETER_CALL", "CHW_VISIT", "REPEAT_MSG"]
+    },
+    "REFERRAL_REJECTED": {
+      "title": "Specialist Referral Rejected / Returned",
+      "description": "Hospital endocrinology clinic returned referral due to capacity cap or missing preliminary records; escrow held at referring GP.",
+      "default_urgency": "HIGH",
+      "baseline": {
+        "projected_completion_rate": 20.0,
+        "projected_unresolved_cases": 1,
+        "projected_overdue_tasks": 3,
+        "coordinator_minutes": 60
+      },
+      "candidate_interventions": ["ALT_PROVIDER", "DOC_RECOVERY", "INTERPRETER_CALL"]
+    },
+    "MISSING_DOCS": {
+      "title": "Missing Clinical Verification Documents",
+      "description": "Specialist triage blocked due to absence of secondary fasting glucose or retinal baseline imaging.",
+      "default_urgency": "ROUTINE",
+      "baseline": {
+        "projected_completion_rate": 40.0,
+        "projected_unresolved_cases": 1,
+        "projected_overdue_tasks": 2,
+        "coordinator_minutes": 35
+      },
+      "candidate_interventions": ["DOC_RECOVERY", "INTERPRETER_CALL", "REPEAT_MSG"]
+    },
+    "NO_SLOT": {
+      "title": "No Participating Clinic Slot Available (<30 Days)",
+      "description": "Primary receiving facility has zero consultation slots within guideline SLA target.",
+      "default_urgency": "HIGH",
+      "baseline": {
+        "projected_completion_rate": 25.0,
+        "projected_unresolved_cases": 1,
+        "projected_overdue_tasks": 2,
+        "coordinator_minutes": 50
+      },
+      "candidate_interventions": ["ALT_PROVIDER", "CHW_VISIT", "DOC_RECOVERY"]
+    },
+    "LANGUAGE_BARRIER": {
+      "title": "Language / Health Literacy Disparity Detected",
+      "description": "Patient failed digital teach-back or indicated non-Arabic/English preferred dialect.",
+      "default_urgency": "HIGH",
+      "baseline": {
+        "projected_completion_rate": 30.0,
+        "projected_unresolved_cases": 1,
+        "projected_overdue_tasks": 2,
+        "coordinator_minutes": 40
+      },
+      "candidate_interventions": ["INTERPRETER_CALL", "CHW_VISIT", "REPEAT_MSG"]
+    }
+  },
+  "intervention_catalogue": {
+    "REPEAT_MSG": {
+      "code": "REPEAT_MSG",
+      "name": "Targeted Multichannel Re-notification",
+      "description": "Dispatch high-contrast SMS + interactive WhatsApp prompt with simplified audio prompt attachment.",
+      "staff_minutes": 5,
+      "lift_completion": 15.0,
+      "overdue_reduction": 1,
+      "unresolved_reduction": 0,
+      "assumptions": [
+        "Patient has active cellular reception and SMS capability",
+        "Delivery acknowledged within 4 hours",
+        "Cost per contact: Minimal"
+      ]
+    },
+    "INTERPRETER_CALL": {
+      "code": "INTERPRETER_CALL",
+      "name": "Bilingual Coordinator Voice Consultation",
+      "description": "Care Navigator initiates structured 15-minute phone call in patient's preferred language with verbal teach-back.",
+      "staff_minutes": 20,
+      "lift_completion": 35.0,
+      "overdue_reduction": 2,
+      "unresolved_reduction": 1,
+      "assumptions": [
+        "Navigator fluent in patient preferred dialect (Arabic/Urdu/Hindi)",
+        "Call scheduled during preferred contact window",
+        "Verbal teach-back recorded directly into audit chain"
+      ]
+    },
+    "CHW_VISIT": {
+      "code": "CHW_VISIT",
+      "name": "In-Person CHW Home Assisted Visit",
+      "description": "Community Health Worker dispatches to patient residence with secure field tablet for in-person consultation and mobility check.",
+      "staff_minutes": 50,
+      "lift_completion": 50.0,
+      "overdue_reduction": 2,
+      "unresolved_reduction": 1,
+      "assumptions": [
+        "Patient resides in designated primary care service catchment",
+        "Tablet offline sync validated with DoH telemetry hub",
+        "Transportation barrier assessed with immediate voucher eligibility"
+      ]
+    },
+    "DOC_RECOVERY": {
+      "code": "DOC_RECOVERY",
+      "name": "Expedited Document & Lab Recovery Protocol",
+      "description": "Automated query across clinic repository and electronic query to primary laboratory to bridge missing pre-requisites.",
+      "staff_minutes": 15,
+      "lift_completion": 30.0,
+      "overdue_reduction": 2,
+      "unresolved_reduction": 1,
+      "assumptions": [
+        "Previous screening records exist in participating laboratory network",
+        "Clinician digital sign-off completed within 12 hours"
+      ]
+    },
+    "ALT_PROVIDER": {
+      "code": "ALT_PROVIDER",
+      "name": "Capacity-Aware Alternate Provider Re-routing",
+      "description": "Identify partner specialty clinic with open slot within 14 days and travel distance < 20km; maintain referral escrow until accepted.",
+      "staff_minutes": 25,
+      "lift_completion": 45.0,
+      "overdue_reduction": 2,
+      "unresolved_reduction": 1,
+      "assumptions": [
+        "Partner facility accepts DoH Thiqa/Basic insurance network",
+        "Referring GP retains escrow accountability until receiving clinic accepts",
+        "Estimated slot available within 7-14 days"
+      ]
+    }
+  }
+}

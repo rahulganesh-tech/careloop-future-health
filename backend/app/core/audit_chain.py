@@ -52,3 +52,47 @@ def verify_audit_chain(entries: List[Any]) -> Tuple[bool, Optional[int]]:
         expected_prev = current_hash
         
     return True, None
+
+def log_audit_event(
+    db: Any,
+    actor: str,
+    role: str,
+    action: str,
+    object_id: str,
+    detail: str = ""
+) -> Any:
+    """
+    Appends a new hash-chained entry to the immutable audit_log.
+    """
+    from datetime import datetime, timezone
+    from app.models.entities import AuditLog
+    last_entry = db.query(AuditLog).order_by(AuditLog.id.desc()).first()
+    prev_hash = last_entry.hash if last_entry else "GENESIS"
+    now_ts = datetime.now(timezone.utc)
+    ts_str = now_ts.isoformat()
+
+    entry_hash = compute_audit_hash(
+        ts_str=ts_str,
+        actor=actor,
+        role=role,
+        action=action,
+        obj=object_id,
+        detail=detail,
+        prev_hash=prev_hash
+    )
+
+    audit_entry = AuditLog(
+        ts=now_ts,
+        actor=actor,
+        role=role,
+        action=action,
+        object=object_id,
+        detail=detail,
+        prev_hash=prev_hash,
+        hash=entry_hash
+    )
+    db.add(audit_entry)
+    db.commit()
+    db.refresh(audit_entry)
+    return audit_entry
+

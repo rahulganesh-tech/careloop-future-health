@@ -257,3 +257,64 @@ CREATE TABLE IF NOT EXISTS audit_log (
     prev_hash VARCHAR(100) NOT NULL,
     hash VARCHAR(100) NOT NULL
 );
+
+-- 21. Recovery Simulator Run
+CREATE TABLE IF NOT EXISTS simulation_run (
+    id SERIAL PRIMARY KEY,
+    run_token VARCHAR(100) UNIQUE NOT NULL,
+    case_id VARCHAR(50) REFERENCES cases(id) ON DELETE CASCADE,
+    scenario_template VARCHAR(100),
+    created_by INT REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    assumptions_version VARCHAR(50) DEFAULT 'v1.2-2026',
+    baseline_metrics JSONB DEFAULT '{}'::jsonb
+);
+
+-- 22. Simulation Option
+CREATE TABLE IF NOT EXISTS simulation_option (
+    id SERIAL PRIMARY KEY,
+    run_id INT REFERENCES simulation_run(id) ON DELETE CASCADE,
+    option_code VARCHAR(50) NOT NULL,
+    option_name VARCHAR(255) NOT NULL,
+    description TEXT NOT NULL,
+    staff_minutes INT DEFAULT 15,
+    assumptions JSONB DEFAULT '[]'::jsonb,
+    projected_completion_rate DOUBLE PRECISION NOT NULL,
+    projected_unresolved_cases INT DEFAULT 0,
+    projected_overdue_tasks INT DEFAULT 0,
+    projected_coordinator_minutes INT DEFAULT 0
+);
+
+-- 23. Simulation Result
+CREATE TABLE IF NOT EXISTS simulation_result (
+    id SERIAL PRIMARY KEY,
+    run_id INT REFERENCES simulation_run(id) ON DELETE CASCADE,
+    recommended_option_code VARCHAR(50) NOT NULL,
+    delta_completion DOUBLE PRECISION NOT NULL,
+    delta_workload_minutes INT NOT NULL,
+    computed_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 24. Simulation Review & Approval
+CREATE TABLE IF NOT EXISTS simulation_review (
+    id SERIAL PRIMARY KEY,
+    run_id INT REFERENCES simulation_run(id) ON DELETE CASCADE,
+    reviewed_by INT REFERENCES users(id) ON DELETE CASCADE,
+    approved BOOLEAN DEFAULT FALSE,
+    approved_option_code VARCHAR(50),
+    review_notes TEXT,
+    applied_at TIMESTAMP WITH TIME ZONE,
+    task_id INT REFERENCES tasks(id) ON DELETE SET NULL
+);
+
+-- 25. Outcome Comparison (Forecast vs Observed)
+CREATE TABLE IF NOT EXISTS outcome_comparison (
+    id SERIAL PRIMARY KEY,
+    case_id VARCHAR(50) REFERENCES cases(id) ON DELETE CASCADE,
+    run_id INT REFERENCES simulation_run(id) ON DELETE CASCADE,
+    forecast_completion_prob DOUBLE PRECISION NOT NULL,
+    observed_outcome VARCHAR(50),
+    observed_at TIMESTAMP WITH TIME ZONE,
+    variance DOUBLE PRECISION
+);
+

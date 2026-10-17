@@ -17,6 +17,11 @@ class Facility(Base):
     name = Column(String(255), nullable=False)
     type = Column(String(50), nullable=False) # SCREENING, PRIMARY, SPECIALIST, LAB
     integration_mode = Column(String(50), default="MANUAL") # FHIR, PORTAL, MANUAL
+    capacity_status = Column(String(50), default="AVAILABLE") # AVAILABLE, HIGH_LOAD, FULL
+    specialties = Column(JSON, default=list) # e.g. ["Endocrinology", "Cardiology"]
+    next_slot = Column(DateTime, nullable=True)
+    distance_km = Column(Float, default=5.0)
+    data_freshness = Column(String(50), default="SIMULATED") # LIVE, MANUAL, SIMULATED
 
     users = relationship("User", back_populates="facility")
     results = relationship("ScreeningResult", back_populates="facility")
@@ -52,6 +57,8 @@ class PatientIdentity(Base):
     consent_whatsapp = Column(Boolean, default=True)
     consent_voice = Column(Boolean, default=True)
     has_smartphone = Column(Boolean, default=True)
+    contact_window = Column(String(50), default="ANYTIME") # ANYTIME, MORNING_9_12, AFTERNOON_12_17, EVENING_17_20
+    accessibility_needs = Column(JSON, default=dict) # {"large_text": false, "audio_notes": false, "interpreter_needed": false}
 
     results = relationship("ScreeningResult", back_populates="patient")
     cases = relationship("Case", back_populates="patient")
@@ -281,6 +288,8 @@ class Barrier(Base):
     recorded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
     ts = Column(DateTime, default=utc_now)
     resolved = Column(Boolean, default=False)
+    resolved_at = Column(DateTime, nullable=True)
+    resolution_time_hours = Column(Float, nullable=True)
 
     case = relationship("Case", back_populates="barriers")
 
@@ -359,3 +368,78 @@ class AuditLog(Base):
     detail = Column(Text, nullable=True)
     prev_hash = Column(String(100), nullable=False)
     hash = Column(String(100), nullable=False, index=True)
+
+
+class SimulationRun(Base):
+    __tablename__ = "simulation_run"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_token = Column(String(100), unique=True, index=True, nullable=False) # e.g. "SIM-2026-001"
+    case_id = Column(String(50), ForeignKey("cases.id"), nullable=True, index=True)
+    scenario_template = Column(String(100), nullable=True) # CRITICAL_UNACK, REFERRAL_REJECTED, etc.
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=utc_now)
+    assumptions_version = Column(String(50), default="v1.2-2026")
+    baseline_metrics = Column(JSON, default=dict)
+
+    options = relationship("SimulationOption", back_populates="run", cascade="all, delete-orphan")
+    results = relationship("SimulationResult", back_populates="run", cascade="all, delete-orphan")
+    reviews = relationship("SimulationReview", back_populates="run", cascade="all, delete-orphan")
+
+
+class SimulationOption(Base):
+    __tablename__ = "simulation_option"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("simulation_run.id"), nullable=False, index=True)
+    option_code = Column(String(50), nullable=False) # REPEAT_MSG, INTERPRETER_CALL, CHW_VISIT, etc.
+    option_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=False)
+    staff_minutes = Column(Integer, default=15)
+    assumptions = Column(JSON, default=list)
+    projected_completion_rate = Column(Float, nullable=False)
+    projected_unresolved_cases = Column(Integer, default=0)
+    projected_overdue_tasks = Column(Integer, default=0)
+    projected_coordinator_minutes = Column(Integer, default=0)
+
+    run = relationship("SimulationRun", back_populates="options")
+
+
+class SimulationResult(Base):
+    __tablename__ = "simulation_result"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("simulation_run.id"), nullable=False, index=True)
+    recommended_option_code = Column(String(50), nullable=False)
+    delta_completion = Column(Float, nullable=False)
+    delta_workload_minutes = Column(Integer, nullable=False)
+    computed_at = Column(DateTime, default=utc_now)
+
+    run = relationship("SimulationRun", back_populates="results")
+
+
+class SimulationReview(Base):
+    __tablename__ = "simulation_review"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("simulation_run.id"), nullable=False, index=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=False)
+    approved = Column(Boolean, default=False)
+    approved_option_code = Column(String(50), nullable=True)
+    review_notes = Column(Text, nullable=True)
+    applied_at = Column(DateTime, nullable=True)
+    task_id = Column(Integer, ForeignKey("tasks.id"), nullable=True)
+
+    run = relationship("SimulationRun", back_populates="reviews")
+
+
+class OutcomeComparison(Base):
+    __tablename__ = "outcome_comparison"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    case_id = Column(String(50), ForeignKey("cases.id"), nullable=False, index=True)
+    run_id = Column(Integer, ForeignKey("simulation_run.id"), nullable=False, index=True)
+    forecast_completion_prob = Column(Float, nullable=False)
+    observed_outcome = Column(String(50), nullable=True) # COMPLETED, STALLED, DROPPED
+    observed_at = Column(DateTime, nullable=True)
+    variance = Column(Float, nullable=True)

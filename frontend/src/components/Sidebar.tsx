@@ -20,7 +20,8 @@ import {
   LogOut,
   ChevronRight,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  Zap
 } from "lucide-react";
 import { getCurrentUser, removeToken, setToken, setCurrentUser } from "@/lib/api";
 
@@ -81,6 +82,7 @@ export function Sidebar() {
 
   const navItems = [
     { label: isRTL ? "لوحة مؤشر التكامل" : "Loop Dashboard", href: "/dashboard", icon: Activity, roles: ["PM", "COORD", "AUDITOR", "ADMIN", "GP"] },
+    { label: isRTL ? "محاكي التعافي والحواجز" : "Recovery Simulator", href: "/recovery", icon: Zap, roles: ["PM", "COORD", "ADMIN", "GP"] },
     { label: isRTL ? "حالات تتطلب إجراء" : "Needs Action Now", href: "/queue", icon: AlertCircle, roles: ["COORD", "PM", "GP", "ADMIN"] },
     { label: isRTL ? "قائمة ومسار الحالات" : "Case Journeys", href: "/cases", icon: FileText, roles: ["GP", "COORD", "SPEC", "PM", "ADMIN", "SCR"] },
     { label: isRTL ? "صندوق الإحالات التخصصية" : "Specialist Referrals", href: "/referrals", icon: GitBranch, roles: ["SPEC", "ADMIN"] },

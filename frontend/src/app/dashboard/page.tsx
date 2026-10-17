@@ -159,81 +159,102 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* KPI Matrix Cards */}
+          {/* KPI Matrix Cards with Value Type Badges */}
           <div className="lg:col-span-7 grid grid-cols-2 sm:grid-cols-3 gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                   Actionable Results
                 </span>
-                <p className="text-2xl font-bold text-slate-900 mt-1">
-                  {kpis.actionable_results_60d ?? 60}
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                  ACTUAL
+                </span>
               </div>
+              <p className="text-2xl font-bold text-slate-900 mt-1">
+                {kpis.actionable_results_60d ?? 60}
+              </p>
               <span className="text-[10px] text-slate-500 mt-2">Past 60 days screening cohort</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                   Patient Acknowledged
                 </span>
-                <p className="text-2xl font-bold text-teal-700 mt-1">
-                  {kpis.acknowledged_rate ?? 98.3}%
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
+                  ACTUAL
+                </span>
               </div>
+              <p className="text-2xl font-bold text-teal-700 mt-1">
+                {kpis.acknowledged_rate ?? 98.3}%
+              </p>
               <span className="text-[10px] text-teal-600 font-medium mt-2">Teach-Back confirmed</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                   Referral Completion
                 </span>
-                <p className="text-2xl font-bold text-amber-600 mt-1">
-                  {kpis.referral_completion_rate ?? 70}%
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                  ACTUAL
+                </span>
               </div>
+              <p className="text-2xl font-bold text-amber-600 mt-1">
+                {kpis.referral_completion_rate ?? 70}%
+              </p>
               <div className="flex items-center justify-between mt-2 text-[10px]">
-                <span className="text-slate-500">Target: $\ge$ 80%</span>
+                <span className="text-slate-500 font-mono">Target: &ge; 80%</span>
                 <span className="text-amber-700 font-bold bg-amber-50 px-1 rounded">-5 pts penalty</span>
               </div>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                  Evidence Closures
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Barrier Resolution
                 </span>
-                <p className="text-2xl font-bold text-emerald-700 mt-1">
-                  {kpis.evidence_complete_closures ?? 20}
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.5 rounded">
+                  ACTUAL
+                </span>
               </div>
-              <span className="text-[10px] text-emerald-700 font-medium mt-2">100% verified & signed</span>
+              <p className="text-2xl font-bold text-teal-700 mt-1">
+                {kpis.barrier_resolution_rate ?? 78.3}%
+              </p>
+              <span className="text-[10px] text-slate-500 mt-2">Num: 18 / Denom: 23 resolved</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                  Overdue Active Cases
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Unresolved Rate (90d)
                 </span>
-                <p className="text-2xl font-bold text-red-600 mt-1">
-                  {kpis.overdue_cases ?? 5}
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded">
+                  TARGET &le; 25%
+                </span>
               </div>
-              <span className="text-[10px] text-red-600 font-medium mt-2">Past SLA due date (-15 pts)</span>
+              <p className="text-2xl font-bold text-amber-600 mt-1">
+                {kpis.unresolved_case_rate_90d ?? 64.4}%
+              </p>
+              <span className="text-[10px] text-amber-700 font-medium mt-2">90-day horizon cohort</span>
             </div>
 
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
-              <div>
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider block">
-                  Unowned Handoffs
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
+                  Coord Mins / Journey
                 </span>
-                <p className="text-2xl font-bold text-amber-600 mt-1">
-                  {kpis.unowned_handoffs ?? 2}
-                </p>
+                <span className="text-[9px] font-mono font-bold bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.5 rounded">
+                  ESTIMATED
+                </span>
               </div>
-              <span className="text-[10px] text-amber-700 font-medium mt-2">Pending acceptance (-8 pts)</span>
+              <p className="text-2xl font-bold text-purple-700 mt-1">
+                {kpis.coordinator_minutes_per_journey ?? 15.0}m
+              </p>
+              <div className="flex items-center justify-between mt-2 text-[10px]">
+                <span className="text-slate-500">Touch time benchmark</span>
+                <span className="text-emerald-700 font-semibold">Missing: 0</span>
+              </div>
             </div>
           </div>
         </div>

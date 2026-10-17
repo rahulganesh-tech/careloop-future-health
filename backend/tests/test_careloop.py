@@ -248,3 +248,195 @@ def test_fhir_care_capsule_bundle():
     assert len(task_entries) > 0
     task_res = task_entries[0]["resource"]
     assert "User ID" in task_res["owner"]["display"]
+
+# ==============================================================================
+# Prompt 7B Tests: Recovery Simulator, Barrier Analytics, Proof Pack & Capacity
+# ==============================================================================
+
+def test_recovery_simulator_never_changes_case_state():
+    """Verify simulation mode cannot alter any real case attributes."""
+    db = SessionLocal()
+    try:
+        case_before = db.query(Case).filter(Case.id == "CASE-1004").first()
+        orig_stage = case_before.stage
+        orig_owner = case_before.owner_user_id
+        orig_due = case_before.due_at
+
+        # Login as PM
+        pm_resp = client.post("/auth/otp", json={"email": "pm@careloop.demo", "otp_code": "482913"})
+        pm_token = pm_resp.json()["token"]
+
+        # Run simulation
+        sim_resp = client.post(
+            "/recovery/simulate",
+            json={"case_id": "CASE-1004"},
+            headers={"Authorization": f"Bearer {pm_token}"}
+        )
+        assert sim_resp.status_code == 200
+        data = sim_resp.json()
+        assert "run_token" in data
+        assert len(data["options"]) > 0
+
+        # Assert case in DB is 100% UNCHANGED
+        case_after = db.query(Case).filter(Case.id == "CASE-1004").first()
+        assert case_after.stage == orig_stage
+        assert case_after.owner_user_id == orig_owner
+        assert case_after.due_at == orig_due
+    finally:
+        db.close()
+
+def test_recovery_simulator_deterministic_reproducibility():
+    """Verify identical inputs produce identical simulation results (reproducible, no ML)."""
+    pm_resp = client.post("/auth/otp", json={"email": "pm@careloop.demo", "otp_code": "482913"})
+    pm_token = pm_resp.json()["token"]
+
+    sim1 = client.post(
+        "/recovery/simulate",
+        json={"scenario_template": "CRITICAL_UNACK"},
+        headers={"Authorization": f"Bearer {pm_token}"}
+    ).json()
+
+    sim2 = client.post(
+        "/recovery/simulate",
+        json={"scenario_template": "CRITICAL_UNACK"},
+        headers={"Authorization": f"Bearer {pm_token}"}
+    ).json()
+
+    # Verify baseline and recommendations match identically
+    assert sim1["baseline"]["projected_completion_rate"] == sim2["baseline"]["projected_completion_rate"]
+    assert sim1["recommendation"]["recommended_option_code"] == sim2["recommendation"]["recommended_option_code"]
+    assert sim1["recommendation"]["delta_completion"] == sim2["recommendation"]["delta_completion"]
+    assert len(sim1["options"]) == len(sim2["options"])
+    for i in range(len(sim1["options"])):
+        assert sim1["options"][i]["option_code"] == sim2["options"][i]["option_code"]
+        assert sim1["options"][i]["projected_completion_rate"] == sim2["options"][i]["projected_completion_rate"]
+        assert sim1["options"][i]["label"] == "ILLUSTRATIVE - SIMULATED"
+
+def test_recovery_simulator_apply_requires_approval_and_links_task():
+    """Verify Apply action creates real task with link to run token."""
+    pm_resp = client.post("/auth/otp", json={"email": "pm@careloop.demo", "otp_code": "482913"})
+    pm_token = pm_resp.json()["token"]
+
+    # 1. Run simulation
+    sim_data = client.post(
+        "/recovery/simulate",
+        json={"case_id": "CASE-1004"},
+        headers={"Authorization": f"Bearer {pm_token}"}
+    ).json()
+    run_id = sim_data["run_id"]
+    run_token = sim_data["run_token"]
+
+    # 2. Apply action
+    apply_resp = client.post(
+        "/recovery/apply",
+        json={
+            "run_id": run_id,
+            "option_code": "CHW_VISIT",
+            "review_notes": "Programme Manager approved field intervention"
+        },
+        headers={"Authorization": f"Bearer {pm_token}"}
+    )
+    assert apply_resp.status_code == 200
+    res = apply_resp.json()
+    assert res["status"] == "APPLIED"
+    assert res["run_token"] == run_token
+    assert res["task_id"] is not None
+
+    # Check task exists and has link to run
+    db = SessionLocal()
+    try:
+        task = db.query(Task).filter(Task.id == res["task_id"]).first()
+        assert task is not None
+        assert run_token in task.created_by_rule
+        assert res["approved_option_code"] == "CHW_VISIT"
+    finally:
+        db.close()
+
+def test_patient_journey_proof_pack_matches_timeline_and_audit():
+    """Verify proof pack produces comprehensive timeline, provenance, and valid audit verification."""
+    gp_resp = client.post("/auth/otp", json={"email": "gp@careloop.demo", "otp_code": "482913"})
+    gp_token = gp_resp.json()["token"]
+
+    resp = client.get("/cases/CASE-1001/proof-pack", headers={"Authorization": f"Bearer {gp_token}"})
+    assert resp.status_code == 200
+    pack = resp.json()
+
+    assert pack["watermark"] == "SYNTHETIC DEMO DATA — NOT FOR CLINICAL USE"
+    assert pack["case_summary"]["case_id"] == "CASE-1001"
+    assert "timeline" in pack
+    assert len(pack["timeline"]) > 0
+    # Provenance field present on events
+    assert "provenance" in pack["timeline"][0]
+    assert len(pack["owner_history"]) > 0
+    assert "audit_verification" in pack
+    assert pack["audit_verification"]["chain_valid"] is True
+    assert pack["audit_verification"]["tamper_detected"] is False
+
+def test_capacity_routing_preserves_owner():
+    """Verify capacity routing suggests slots and maintains sender escrow ownership."""
+    gp_resp = client.post("/auth/otp", json={"email": "gp@careloop.demo", "otp_code": "482913"})
+    gp_token = gp_resp.json()["token"]
+
+    # Get suggestions
+    sug_resp = client.get("/routing/suggestions?case_id=CASE-1012&specialty=Endocrinology", headers={"Authorization": f"Bearer {gp_token}"})
+    assert sug_resp.status_code == 200
+    sug_data = sug_resp.json()
+    assert len(sug_data["providers"]) > 0
+    assert sug_data["requires_clinician_approval"] is True
+    # Verify data freshness tag exists
+    assert sug_data["providers"][0]["data_freshness"] in ["LIVE", "MANUAL", "SIMULATED"]
+
+    # Apply rerouting to CCAD
+    reroute_resp = client.post(
+        "/routing/apply",
+        json={"case_id": "CASE-1012", "target_facility": "CCAD", "rationale": "DEC operating at capacity limit."},
+        headers={"Authorization": f"Bearer {gp_token}"}
+    )
+    assert reroute_resp.status_code == 200
+    assert reroute_resp.json()["status"] == "REROUTED"
+
+    # Verify sender keeps escrow ownership
+    db = SessionLocal()
+    try:
+        c = db.query(Case).filter(Case.id == "CASE-1012").first()
+        assert c.stage == "REFERRAL_SENT"
+        assert c.escrow_holder_user_id is not None
+    finally:
+        db.close()
+
+def test_barrier_analytics_reconciles_and_shows_denominators():
+    """Verify barrier analytics returns denominators, resolution rates, and n<10 warnings."""
+    pm_resp = client.post("/auth/otp", json={"email": "pm@careloop.demo", "otp_code": "482913"})
+    pm_token = pm_resp.json()["token"]
+
+    resp = client.get("/analytics/barriers", headers={"Authorization": f"Bearer {pm_token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "summary" in data
+    assert data["summary"]["total_barriers"] > 0
+    assert "barriers" in data
+    for b in data["barriers"]:
+        assert "numerator" in b
+        assert "denominator" in b
+        assert b["numerator"] <= b["denominator"]
+        assert "low_sample_warning" in b
+        assert "median_time_to_resolve_hours" in b
+    assert "disclaimer" in data
+    assert "associations" in data["disclaimer"].lower()
+
+def test_kpi_metrics_show_denominators_and_value_types():
+    """Verify every KPI shows denominator and carries value_type badge."""
+    pm_resp = client.post("/auth/otp", json={"email": "pm@careloop.demo", "otp_code": "482913"})
+    pm_token = pm_resp.json()["token"]
+    dash_resp = client.get("/dashboard", headers={"Authorization": f"Bearer {pm_token}"})
+    assert dash_resp.status_code == 200
+    data = dash_resp.json()
+    metrics = data["metrics"]
+
+    assert "barrier_resolution_numerator" in metrics
+    assert "barrier_resolution_denominator" in metrics
+    assert "value_types" in metrics
+    assert metrics["value_types"]["score"] == "ACTUAL"
+    assert metrics["value_types"]["target_completion_rate"] == "TARGET"
+    assert metrics["value_types"]["coordinator_minutes_per_journey"] == "ESTIMATED"
+

@@ -167,4 +167,32 @@ export const api = {
     apiRequest(`/rules/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   getPathways: () => apiRequest("/pathways"),
   getUsers: () => apiRequest("/users"),
+
+  // Prompt 7B: Recovery Simulator, Barrier Analytics, Proof Pack & Capacity Routing
+  getSimulationAssumptions: () => apiRequest("/recovery/assumptions"),
+  getSimulationRuns: () => apiRequest("/recovery/runs"),
+  simulateRecovery: (data: { case_id?: string; scenario_template?: string }) =>
+    apiRequest("/recovery/simulate", { method: "POST", body: JSON.stringify(data) }),
+  applyRecovery: (data: { run_id: number; option_code: string; review_notes: string }) =>
+    apiRequest("/recovery/apply", { method: "POST", body: JSON.stringify(data) }),
+
+  getBarrierAnalytics: (params?: { facility?: string; language?: string; channel?: string; barrier?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.facility) q.append("facility", params.facility);
+    if (params?.language) q.append("language", params.language);
+    if (params?.channel) q.append("channel", params.channel);
+    if (params?.barrier) q.append("barrier", params.barrier);
+    return apiRequest(`/analytics/barriers?${q.toString()}`);
+  },
+
+  getProofPack: (caseId: string) => apiRequest(`/cases/${caseId}/proof-pack`),
+
+  getCapacityRoutingSuggestions: (caseId: string, specialty?: string) =>
+    apiRequest(`/routing/suggestions?case_id=${caseId}${specialty ? `&specialty=${encodeURIComponent(specialty)}` : ""}`),
+  applyCapacityReroute: (data: { case_id: string; target_facility: string; rationale: string }) =>
+    apiRequest("/routing/apply", { method: "POST", body: JSON.stringify(data) }),
+
+  getPatientPreferences: (caseId: string) => apiRequest(`/cases/${caseId}/patient-preferences`),
+  updatePatientPreferences: (caseId: string, data: any) =>
+    apiRequest(`/cases/${caseId}/patient-preferences`, { method: "PUT", body: JSON.stringify(data) }),
 };

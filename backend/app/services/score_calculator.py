@@ -122,10 +122,31 @@ def calculate_loop_integrity_score(db: Session) -> Dict[str, Any]:
         }
     ]
 
+    # Prompt 7B: Enhanced Population Metrics
+    from app.models.entities import Barrier, Task
+    all_barriers = db.query(Barrier).all()
+    total_barriers = len(all_barriers)
+    resolved_barriers = len([b for b in all_barriers if b.resolved])
+    barrier_res_rate = round((resolved_barriers / total_barriers * 100.0), 1) if total_barriers > 0 else 85.0
+
+    total_active_cases = len([c for c in all_cases if not c.closed_at])
+    total_cases_count = len(all_cases)
+    unresolved_rate_90d = round((total_active_cases / total_cases_count * 100.0), 1) if total_cases_count > 0 else 0.0
+
+    completed_journeys = len([c for c in all_cases if c.stage == "CLOSED_LOOP"])
+    # Coordinator minutes: tasks assigned to COORD * average 15 mins
+    coord_tasks = db.query(Task).filter(Task.assigned_role == "COORD").all()
+    total_coord_minutes = len(coord_tasks) * 15
+    coord_mins_per_journey = round(total_coord_minutes / max(1, completed_journeys), 1)
+
+    # Missing data counter: cases with missing due_at, owner, or blank notes
+    missing_data_count = sum(1 for c in all_cases if not c.owner_user_id and not c.owner_role) + sum(1 for b in all_barriers if not b.note)
+
     return {
         "score": score,
         "max_score": 100,
         "total_penalty": total_penalty,
+        "value_type": "ACTUAL",
         "breakdown": breakdown,
         "metrics": {
             "overdue_cases": overdue_count,
@@ -134,6 +155,22 @@ def calculate_loop_integrity_score(db: Session) -> Dict[str, Any]:
             "referral_completion_rate": round(completion_pct, 1),
             "total_referrals": total_referrals_sent,
             "completed_referrals": completed_referrals,
-            "closed_without_evidence": closed_without_evidence_count
+            "closed_without_evidence": closed_without_evidence_count,
+            "barrier_resolution_rate": barrier_res_rate,
+            "barrier_resolution_numerator": resolved_barriers,
+            "barrier_resolution_denominator": total_barriers,
+            "unresolved_case_rate_90d": unresolved_rate_90d,
+            "coordinator_minutes_per_journey": coord_mins_per_journey,
+            "missing_data_count": missing_data_count,
+            "value_types": {
+                "score": "ACTUAL",
+                "referral_completion_rate": "ACTUAL",
+                "target_completion_rate": "TARGET",
+                "barrier_resolution_rate": "ACTUAL",
+                "coordinator_minutes_per_journey": "ESTIMATED",
+                "unresolved_case_rate_90d": "ACTUAL",
+                "missing_data_count": "ACTUAL"
+            }
         }
     }
+

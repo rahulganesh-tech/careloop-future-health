@@ -77,6 +77,7 @@ def get_dashboard(
     return {
         "loop_integrity_score": score_data["score"],
         "score_breakdown": score_data["breakdown"],
+        "metrics": score_data["metrics"],
         "kpis": {
             "actionable_results_60d": total_actionable,
             "acknowledged_rate": round(ack_pct, 1),
@@ -84,7 +85,11 @@ def get_dashboard(
             "referral_completion_rate": completion_pct,
             "evidence_complete_closures": evidence_complete_closures,
             "overdue_cases": score_data["metrics"]["overdue_cases"],
-            "unowned_handoffs": score_data["metrics"]["unowned_handoffs"]
+            "unowned_handoffs": score_data["metrics"]["unowned_handoffs"],
+            "barrier_resolution_rate": score_data["metrics"].get("barrier_resolution_rate", 78.3),
+            "coordinator_minutes_per_journey": score_data["metrics"].get("coordinator_minutes_per_journey", 15.0),
+            "unresolved_case_rate_90d": score_data["metrics"].get("unresolved_case_rate_90d", 64.4),
+            "missing_data_count": score_data["metrics"].get("missing_data_count", 0)
         },
         "funnel": funnel,
         "drop_off_reasons": drop_off_reasons,

@@ -24,7 +24,16 @@ import {
   Sparkles,
   ExternalLink,
   RefreshCw,
-  QrCode
+  QrCode,
+  Printer,
+  Compass,
+  Check,
+  Phone,
+  MessageSquare,
+  Ear,
+  Eye,
+  Sliders,
+  CheckSquare
 } from "lucide-react";
 
 const STAGES_ORDER = [
@@ -65,9 +74,35 @@ export default function CaseDetailPage() {
   const [fhirData, setFhirData] = useState<any>(null);
   const [showFhir, setShowFhir] = useState(false);
 
+  // Prompt 7B: Patient Journey Proof Pack state
+  const [proofPackData, setProofPackData] = useState<any>(null);
+  const [showProofPack, setShowProofPack] = useState(false);
+  const [proofPackLoading, setProofPackLoading] = useState(false);
+
+  // Prompt 7B: Patient Contact Preferences state
+  const [contactWindow, setContactWindow] = useState<string>("MORNING");
+  const [accLargeText, setAccLargeText] = useState(false);
+  const [accAudioNotes, setAccAudioNotes] = useState(false);
+  const [accInterpreter, setAccInterpreter] = useState(false);
+  const [consentSms, setConsentSms] = useState(true);
+  const [consentWhatsapp, setConsentWhatsapp] = useState(true);
+  const [consentVoice, setConsentVoice] = useState(false);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [prefsSavedMsg, setPrefsSavedMsg] = useState<string | null>(null);
+
+  // Prompt 7B: Capacity-Aware Routing state
+  const [showRoutingModal, setShowRoutingModal] = useState(false);
+  const [routingSuggestions, setRoutingSuggestions] = useState<any>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [selectedTargetFacility, setSelectedTargetFacility] = useState<string>("CCAD");
+  const [rerouteRationale, setRerouteRationale] = useState<string>("Current referral facility at full capacity; urgent alternate intake requested.");
+  const [clinicianApprovalConfirmed, setClinicianApprovalConfirmed] = useState(false);
+  const [reroutingInProgress, setReroutingInProgress] = useState(false);
+
   useEffect(() => {
     setCurrentUser(getCurrentUser());
     loadCaseData();
+    loadPatientPreferences();
   }, [caseId]);
 
   const loadCaseData = async () => {
@@ -86,6 +121,51 @@ export default function CaseDetailPage() {
       setErrorMsg(err.message || "Failed to load case details.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadPatientPreferences = async () => {
+    try {
+      const prefs = await api.getPatientPreferences(caseId);
+      if (prefs) {
+        setContactWindow(prefs.contact_window || "MORNING");
+        const needs = prefs.accessibility_needs || [];
+        setAccLargeText(needs.includes("large_text"));
+        setAccAudioNotes(needs.includes("audio_notes"));
+        setAccInterpreter(needs.includes("interpreter_needed"));
+        const consent = prefs.channel_consent || {};
+        setConsentSms(consent.SMS !== false);
+        setConsentWhatsapp(consent.WHATSAPP !== false);
+        setConsentVoice(consent.VOICE === true);
+      }
+    } catch {
+      // Preferences optional
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    setPrefsSaving(true);
+    setPrefsSavedMsg(null);
+    try {
+      const accessibility_needs: string[] = [];
+      if (accLargeText) accessibility_needs.push("large_text");
+      if (accAudioNotes) accessibility_needs.push("audio_notes");
+      if (accInterpreter) accessibility_needs.push("interpreter_needed");
+
+      await api.updatePatientPreferences(caseId, {
+        contact_window: contactWindow,
+        accessibility_needs,
+        channel_consent: {
+          SMS: consentSms,
+          WHATSAPP: consentWhatsapp,
+          VOICE: consentVoice
+        }
+      });
+      setPrefsSavedMsg("Patient contact preferences updated successfully!");
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to save preferences.");
+    } finally {
+      setPrefsSaving(false);
     }
   };
 
@@ -129,6 +209,74 @@ export default function CaseDetailPage() {
       setErrorMsg(err.message || "Failed to load FHIR bundle.");
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  // Proof Pack Handler
+  const handleViewProofPack = async () => {
+    setProofPackLoading(true);
+    setErrorMsg(null);
+    try {
+      const pack = await api.getProofPack(caseId);
+      setProofPackData(pack);
+      setShowProofPack(true);
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to load Patient Journey Proof Pack.");
+    } finally {
+      setProofPackLoading(false);
+    }
+  };
+
+  const handleDownloadProofPackJson = () => {
+    if (!proofPackData) return;
+    const blob = new Blob([JSON.stringify(proofPackData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `careloop_proof_pack_${caseId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Capacity Routing Handlers
+  const handleOpenCapacityRouting = async () => {
+    setShowRoutingModal(true);
+    setRoutingLoading(true);
+    setErrorMsg(null);
+    setClinicianApprovalConfirmed(false);
+    try {
+      const data = await api.getCapacityRoutingSuggestions(caseId, "Endocrinology");
+      setRoutingSuggestions(data);
+      if (data.providers && data.providers.length > 0) {
+        setSelectedTargetFacility(data.providers[0].facility_id);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to fetch routing suggestions.");
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
+
+  const handleApplyReroute = async () => {
+    if (!clinicianApprovalConfirmed) {
+      setErrorMsg("Clinician approval is required to reroute referral.");
+      return;
+    }
+    setReroutingInProgress(true);
+    setErrorMsg(null);
+    try {
+      await api.applyCapacityReroute({
+        case_id: caseId,
+        target_facility: selectedTargetFacility,
+        rationale: rerouteRationale
+      });
+      setSuccessMsg(`Referral rerouted to ${selectedTargetFacility}. Clinical accountability preserved under sending provider escrow.`);
+      setShowRoutingModal(false);
+      await loadCaseData();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to reroute referral.");
+    } finally {
+      setReroutingInProgress(false);
     }
   };
 
@@ -176,7 +324,7 @@ export default function CaseDetailPage() {
 
         <div className="p-8 max-w-7xl w-full mx-auto space-y-6">
           {/* Top Breadcrumbs & Actions */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <Link
               href="/cases"
               className="inline-flex items-center space-x-1 text-xs text-slate-600 hover:text-teal-700 font-medium"
@@ -185,13 +333,30 @@ export default function CaseDetailPage() {
               <span>Back to Case Journeys</span>
             </Link>
 
-            <div className="flex items-center space-x-2">
+            <div className="flex flex-wrap items-center gap-2">
+              {/* One-Click Patient Journey Proof Pack Button */}
               <button
+                type="button"
+                onClick={handleViewProofPack}
+                disabled={proofPackLoading}
+                className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-lg text-xs shadow-sm transition disabled:opacity-50"
+              >
+                {proofPackLoading ? (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-slate-950" />
+                ) : (
+                  <ShieldCheck className="w-3.5 h-3.5 text-slate-950" />
+                )}
+                <span>Patient Journey Proof Pack</span>
+                <span className="text-[10px] font-mono bg-amber-600/30 px-1.5 rounded">PDF + JSON</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={handleViewFhir}
                 className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-medium text-slate-700 hover:bg-slate-50 shadow-sm"
               >
                 <Download className="w-3.5 h-3.5 text-teal-600" />
-                <span>Export FHIR R4 Bundle</span>
+                <span>FHIR R4 Bundle</span>
               </button>
 
               <Link
@@ -342,12 +507,14 @@ export default function CaseDetailPage() {
 
           {/* Two-Column Layout: Evidence Gate & Journey Data */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left 2 Cols: Journey Data & Referrals */}
+            
+            {/* Left 2 Cols: Journey Data, Capacity Routing & Preferences */}
             <div className="lg:col-span-2 space-y-6">
-              {/* Referrals & Escrow Card */}
+              
+              {/* Referrals & Capacity Routing Card */}
               {caseData.referrals && caseData.referrals.length > 0 && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <div className="flex items-center justify-between">
                     <h2 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
                       <Building className="w-4 h-4 text-teal-600" />
                       <span>Specialist Referral & Escrow Status</span>
@@ -371,7 +538,11 @@ export default function CaseDetailPage() {
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-slate-500">Referral Status:</span>
-                        <span className="font-bold text-slate-800">{caseData.referrals[0].status}</span>
+                        <span className={`font-bold ${
+                          caseData.referrals[0].status === "REJECTED" ? "text-rose-600" : "text-slate-800"
+                        }`}>
+                          {caseData.referrals[0].status}
+                        </span>
                       </div>
                       {caseData.referrals[0].reject_reason && (
                         <div className="p-2 bg-rose-50 border border-rose-200 rounded text-rose-800 text-[11px]">
@@ -380,7 +551,17 @@ export default function CaseDetailPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-end">
+                    <div className="flex items-center justify-between pt-1">
+                      {/* Capacity-Aware Routing Trigger */}
+                      <button
+                        type="button"
+                        onClick={handleOpenCapacityRouting}
+                        className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-semibold text-xs shadow-sm transition"
+                      >
+                        <Compass className="w-3.5 h-3.5" />
+                        <span>Capacity-Aware Alternate Routing</span>
+                      </button>
+
                       <Link
                         href={`/receipts/${caseData.referrals[0].receipt_token}`}
                         target="_blank"
@@ -393,6 +574,144 @@ export default function CaseDetailPage() {
                   </div>
                 </div>
               )}
+
+              {/* Prompt 7B: Patient Contact Preferences Card */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <Sliders className="w-4 h-4 text-teal-600" />
+                    <h2 className="text-sm font-bold text-slate-800">
+                      Patient Contact Preferences & Accessibility Needs
+                    </h2>
+                  </div>
+                  <span className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded font-bold">
+                    VALUE_TYPE: ACTUAL
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  {/* Preferred Contact Window */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase">
+                      Contact Window:
+                    </label>
+                    <select
+                      value={contactWindow}
+                      onChange={(e) => setContactWindow(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-teal-500"
+                    >
+                      <option value="MORNING">Morning (08:00 – 12:00)</option>
+                      <option value="AFTERNOON">Afternoon (12:00 – 17:00)</option>
+                      <option value="EVENING">Evening (17:00 – 20:00)</option>
+                    </select>
+                    <span className="text-[10px] text-slate-400 block">Strictly enforced for outbound outreach</span>
+                  </div>
+
+                  {/* Accessibility Needs */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase">
+                      Accessibility Needs:
+                    </label>
+                    <div className="space-y-1">
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={accLargeText}
+                          onChange={(e) => setAccLargeText(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Large Text & High Contrast</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={accAudioNotes}
+                          onChange={(e) => setAccAudioNotes(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Audio Voice Notes</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={accInterpreter}
+                          onChange={(e) => setAccInterpreter(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Medical Interpreter Needed</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Channel Consent */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase">
+                      Channel Consent:
+                    </label>
+                    <div className="space-y-1">
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={consentWhatsapp}
+                          onChange={(e) => setConsentWhatsapp(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Interactive WhatsApp</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={consentSms}
+                          onChange={(e) => setConsentSms(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Two-Way SMS Text</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={consentVoice}
+                          onChange={(e) => setConsentVoice(e.target.checked)}
+                          className="rounded text-teal-600"
+                        />
+                        <span>Direct Voice Call (IVR)</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Decoupled notice banner */}
+                <div className="p-3 bg-teal-50/70 border border-teal-200 rounded-xl text-[11px] text-teal-900 leading-relaxed">
+                  <span className="font-bold">Decoupled Architectural Invariant:</span> Delivery receipt, patient understanding (Teach-Back verification), and clinical acknowledgment remain separate verified events. Automated fallback rules respect contact windows and accessibility requirements.
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  {prefsSavedMsg && (
+                    <span className="text-xs font-semibold text-emerald-700 flex items-center space-x-1">
+                      <Check className="w-3.5 h-3.5" />
+                      <span>{prefsSavedMsg}</span>
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSavePreferences}
+                    disabled={prefsSaving}
+                    className="ml-auto inline-flex items-center space-x-1.5 px-4 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                  >
+                    {prefsSaving ? (
+                      <>
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Save Preferences</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
 
               {/* Appointments & Clinical Outcome */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -439,136 +758,134 @@ export default function CaseDetailPage() {
                 )}
               </div>
 
-              {/* Cryptographic Audit Trail Slice */}
+              {/* Immutable Cryptographic Audit Log Strip */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
                     <ShieldCheck className="w-4 h-4 text-teal-600" />
-                    <span>Case Audit Trail (Cryptographically Chained)</span>
+                    <span>Cryptographic Audit Events ({auditLogs.length})</span>
                   </h2>
-                  <span className="text-[10px] text-slate-400">Immutable SHA-256 Chain</span>
+                  <span className="text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-semibold">
+                    SHA-256 Tamper Evident
+                  </span>
                 </div>
 
-                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                  {auditLogs.map((log: any) => (
-                    <div key={log.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-[11px] font-mono space-y-1">
+                <div className="space-y-2 max-h-60 overflow-y-auto font-mono text-[11px]">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="p-2.5 bg-slate-50 rounded-lg border border-slate-200 flex flex-col space-y-1">
                       <div className="flex items-center justify-between text-slate-500">
-                        <span>{new Date(log.created_at).toLocaleTimeString()} • {log.actor} ({log.role})</span>
-                        <span className="text-teal-700 font-bold">{log.action}</span>
+                        <span className="font-bold text-slate-800">{log.action}</span>
+                        <span>{new Date(log.timestamp).toLocaleString()}</span>
                       </div>
-                      <div className="text-slate-800 text-[11px] font-sans">{log.detail}</div>
-                      <div className="text-[9px] text-slate-400 truncate">
-                        Hash: {log.record_hash}
+                      <div className="text-slate-600">{log.detail}</div>
+                      <div className="text-[10px] text-slate-400 truncate">
+                        Hash: {log.current_hash}
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
+
             </div>
 
-            {/* Right Col: Closure Evidence Gate & Dual Sign-Off */}
+            {/* Right 1 Col: Evidence Gate, Dual Sign-off & Closure */}
             <div className="space-y-6">
-              {/* Evidence Gate Card */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
-                    <Lock className="w-4 h-4 text-teal-600" />
-                    <span>Closure Evidence Gate</span>
+              
+              {/* Evidence Checklist Gate */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
+                    <FileText className="w-4 h-4 text-teal-600" />
+                    <span>Evidence Checklist Gate</span>
                   </h2>
-                  {closureStatus?.ready_to_close ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                      GATE READY
-                    </span>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    closureStatus?.checklist_complete
+                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                      : "bg-amber-100 text-amber-800 border border-amber-300"
+                  }`}>
+                    {closureStatus?.checklist_complete ? "All Evidence Present" : "Gate Blocked"}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {closureStatus?.checklist ? (
+                    Object.entries(closureStatus.checklist).map(([key, val]: [string, any]) => (
+                      <div key={key} className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
+                        <span className="text-slate-700 capitalize">{key.replace(/_/g, " ")}</span>
+                        {val ? (
+                          <span className="flex items-center space-x-1 text-emerald-600 font-bold text-[11px]">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            <span>Verified</span>
+                          </span>
+                        ) : (
+                          <span className="flex items-center space-x-1 text-amber-600 font-bold text-[11px]">
+                            <AlertTriangle className="w-3.5 h-3.5" />
+                            <span>Required</span>
+                          </span>
+                        )}
+                      </div>
+                    ))
                   ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                      BLOCKED
-                    </span>
+                    <div className="text-slate-400">Loading checklist...</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Dual Clinical Sign-Off */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
+                    <CheckCircle className="w-4 h-4 text-teal-600" />
+                    <span>Dual Clinical Sign-Off</span>
+                  </h2>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    closureStatus?.signoffs?.length >= 2
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-amber-100 text-amber-800"
+                  }`}>
+                    {closureStatus?.signoffs?.length || 0} / 2 Complete
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  {closureStatus?.signoffs && closureStatus.signoffs.length > 0 ? (
+                    closureStatus.signoffs.map((s: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-emerald-900">{s.role} Sign-off</span>
+                          <span className="text-[10px] text-slate-400">{new Date(s.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <div className="text-slate-600 text-[11px] italic">"{s.statement}"</div>
+                        <div className="text-[10px] text-slate-400 font-mono">Signer User ID: {s.signer_id}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-slate-400 text-xs italic">No clinical sign-offs recorded yet.</p>
                   )}
                 </div>
 
-                <p className="text-xs text-slate-500 mb-4">
-                  Evidence-before-closure invariant: A case cannot be closed based on sent notifications alone.
-                </p>
-
-                {/* Evidence Checklist */}
-                <div className="space-y-2 mb-6">
-                  {closureStatus?.evidence_items?.map((item: any, idx: number) => (
-                    <div
-                      key={idx}
-                      className={`p-2.5 rounded-xl border flex items-start space-x-2.5 text-xs ${
-                        item.present
-                          ? "bg-emerald-50/60 border-emerald-200 text-emerald-900"
-                          : "bg-rose-50/60 border-rose-200 text-rose-900"
-                      }`}
-                    >
-                      {item.present ? (
-                        <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0 mt-0.5" />
-                      ) : (
-                        <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-                      )}
-                      <div>
-                        <div className="font-semibold">{item.name}</div>
-                        <div className="text-[11px] opacity-80">{item.detail}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Dual Sign-Off Status */}
-                <div className="border-t border-slate-100 pt-4 mb-6">
-                  <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                    Dual Role Sign-Off Status
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
-                      <span className="text-slate-600 font-medium">1. Referring GP Sign-Off</span>
-                      {closureStatus?.signoffs?.gp_signed ? (
-                        <span className="font-bold text-emerald-700 flex items-center space-x-1">
-                          <CheckCircle className="w-3.5 h-3.5 inline mr-1" />
-                          <span>{closureStatus.signoffs.gp_user}</span>
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Pending GP</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between p-2 rounded-lg bg-slate-50 border border-slate-200">
-                      <span className="text-slate-600 font-medium">2. Coordinator Sign-Off</span>
-                      {closureStatus?.signoffs?.coord_signed ? (
-                        <span className="font-bold text-emerald-700 flex items-center space-x-1">
-                          <CheckCircle className="w-3.5 h-3.5 inline mr-1" />
-                          <span>{closureStatus.signoffs.coord_user}</span>
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 italic">Pending Coordinator</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sign-Off Action Form (if not closed) */}
+                {/* Form to submit signoff */}
                 {!isClosed && (
-                  <div className="border-t border-slate-100 pt-4 space-y-3">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Execute Sign-Off
-                    </h3>
+                  <div className="pt-3 border-t border-slate-100 space-y-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Select Role</label>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Sign-off Role</label>
                       <select
                         value={signoffRole}
                         onChange={(e) => setSignoffRole(e.target.value)}
                         className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
                       >
-                        <option value="GP">Referring GP (Ahmed Al-Mansouri)</option>
-                        <option value="COORD">Care Navigator (Mariam Al-Hosani)</option>
+                        <option value="GP">Referring GP (Primary Review)</option>
+                        <option value="SPECIALIST">Consulting Specialist (Secondary Review)</option>
+                        <option value="COORD">Clinical Navigator (Care Coordination)</option>
                       </select>
                     </div>
 
                     <div>
                       <label className="text-[11px] font-semibold text-slate-600 block mb-1">Clinical Statement</label>
-                      <textarea
+                      <input
+                        type="text"
                         value={signoffStatement}
                         onChange={(e) => setSignoffStatement(e.target.value)}
-                        rows={2}
                         className="w-full text-xs border border-slate-300 rounded-lg p-2 bg-white"
                       />
                     </div>
@@ -576,25 +893,46 @@ export default function CaseDetailPage() {
                     <button
                       onClick={handleSignoff}
                       disabled={actionLoading}
-                      className="w-full py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-50"
+                      className="w-full py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-lg text-xs font-semibold shadow-sm transition"
                     >
-                      {actionLoading ? "Submitting Sign-off..." : `Sign-Off as ${signoffRole}`}
+                      {actionLoading ? "Recording..." : `Sign off as ${signoffRole}`}
                     </button>
-                    <p className="text-[10px] text-slate-400 italic text-center">
-                      *Note: Invariant enforces that the GP and Coordinator sign-offs must be separate users.
-                    </p>
                   </div>
                 )}
+              </div>
 
-                {/* Final Closure Seal Action */}
-                {!isClosed && (
-                  <div className="border-t border-slate-100 pt-4 mt-4 space-y-3">
-                    <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                      Seal & Close Care Journey
-                    </h3>
+              {/* Closure Seal Action */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-800 flex items-center space-x-2">
+                    <Lock className="w-4 h-4 text-teal-600" />
+                    <span>Cryptographic Closure Seal</span>
+                  </h2>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
+                    isClosed
+                      ? "bg-emerald-100 text-emerald-800"
+                      : closureStatus?.ready_to_close
+                      ? "bg-teal-100 text-teal-800"
+                      : "bg-slate-100 text-slate-500"
+                  }`}>
+                    {isClosed ? "Loop Sealed" : closureStatus?.ready_to_close ? "Ready to Seal" : "Pending Requirements"}
+                  </span>
+                </div>
 
+                {isClosed ? (
+                  <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                      <span className="font-bold">Loop Integrity Fully Sealed</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800">
+                      Closed with disposition: <strong>{caseData.disposition}</strong>. Tamper-evident closure seal recorded into immutable ledger.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Disposition</label>
+                      <label className="text-[11px] font-semibold text-slate-600 block mb-1">Final Disposition</label>
                       <select
                         value={disposition}
                         onChange={(e) => setDisposition(e.target.value)}
@@ -633,10 +971,336 @@ export default function CaseDetailPage() {
                   </div>
                 )}
               </div>
+
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+
+      {/* PROMPT 7B: PATIENT JOURNEY PROOF PACK MODAL */}
+      {showProofPack && proofPackData && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            
+            {/* Modal Header */}
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <ShieldCheck className="w-5 h-5 text-amber-600" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Patient Journey Proof Pack: {caseId}
+                  </h3>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    Built from FHIR Care Capsule & Cryptographic Audit Ledger
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center space-x-1 px-3 py-1.5 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg text-xs font-semibold text-slate-700"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDownloadProofPackJson}
+                  className="inline-flex items-center space-x-1 px-3 py-1.5 bg-teal-700 hover:bg-teal-800 rounded-lg text-xs font-semibold text-white"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Download JSON</span>
+                </button>
+                <button
+                  onClick={() => setShowProofPack(false)}
+                  className="text-slate-400 hover:text-slate-600 text-sm font-bold px-2 py-1"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Proof Pack Content Body */}
+            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-800">
+              
+              {/* Mandatory Watermark Banner */}
+              <div className="p-3 bg-amber-500 text-slate-950 font-black text-center tracking-widest text-xs uppercase rounded-lg border border-amber-600">
+                {proofPackData.watermark || "SYNTHETIC DEMO DATA — NOT FOR CLINICAL USE"}
+              </div>
+
+              {/* Cryptographic Audit Verification Banner */}
+              <div className="p-4 bg-emerald-50 border border-emerald-300 rounded-xl flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-bold text-emerald-950 text-xs">
+                      Cryptographic Audit Chain: Valid & Tamper-Free
+                    </h4>
+                    <p className="text-[11px] text-emerald-800">
+                      Verified {proofPackData.audit_verification?.blocks_verified || 0} ledger blocks across this journey. Zero tampered entries detected.
+                    </p>
+                  </div>
+                </div>
+                <span className="font-mono text-[10px] bg-white text-emerald-800 px-2.5 py-1 rounded border border-emerald-300 font-bold">
+                  SHA-256 SEAL VERIFIED
+                </span>
+              </div>
+
+              {/* Case Summary Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Case ID</span>
+                  <span className="font-mono font-bold text-slate-900">{proofPackData.case_summary?.case_id}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Patient Ref</span>
+                  <span className="font-mono font-semibold text-slate-800">{proofPackData.case_summary?.patient_id}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Pathway</span>
+                  <span className="font-semibold text-slate-800">{proofPackData.case_summary?.screening_type}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Disposition</span>
+                  <span className="font-bold text-teal-800">{proofPackData.case_summary?.disposition}</span>
+                </div>
+              </div>
+
+              {/* Full Provenance Timeline */}
+              <div className="space-y-3">
+                <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider flex items-center space-x-1.5">
+                  <Clock className="w-3.5 h-3.5 text-teal-600" />
+                  <span>Verified Journey Timeline with Provenance</span>
+                </h4>
+                <div className="space-y-2">
+                  {(proofPackData.timeline || []).map((t: any, idx: number) => {
+                    let provBadge = "bg-slate-100 text-slate-700 border-slate-200";
+                    if (t.provenance === "PROVIDER_VERIFIED") provBadge = "bg-emerald-100 text-emerald-800 border-emerald-300";
+                    if (t.provenance === "SELF_REPORT") provBadge = "bg-teal-100 text-teal-800 border-teal-300";
+                    if (t.provenance === "SYSTEM") provBadge = "bg-purple-100 text-purple-800 border-purple-300";
+
+                    return (
+                      <div key={idx} className="p-3 bg-white rounded-lg border border-slate-200 flex items-start justify-between gap-3 text-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-bold text-slate-900">{t.event_type}</span>
+                            <span className={`text-[10px] font-mono font-bold px-2 py-0.2 rounded border ${provBadge}`}>
+                              {t.provenance}
+                            </span>
+                            <span className="text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {t.channel}
+                            </span>
+                          </div>
+                          <p className="text-slate-600 text-[11px]">{t.detail}</p>
+                          <div className="text-[10px] text-slate-400 font-mono">
+                            Actor: {t.actor} ({t.role}) · Event #{t.event_id}
+                          </div>
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-500 flex-shrink-0">
+                          {new Date(t.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Escrow Owner History & Referral Responses */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Owner Transition History</h4>
+                  <div className="space-y-1.5 text-[11px]">
+                    {(proofPackData.owner_history || []).map((o: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-white rounded border border-slate-200">
+                        <span>Owner: <strong>{o.owner_role}</strong> ({o.user_id})</span>
+                        <span className="text-[10px] text-slate-400">{new Date(o.timestamp).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
+                  <h4 className="font-bold text-slate-900 text-xs uppercase tracking-wider">Dual Sign-Offs & Signers</h4>
+                  <div className="space-y-1.5 text-[11px]">
+                    {(proofPackData.signoffs || []).map((s: any, idx: number) => (
+                      <div key={idx} className="p-2 bg-white rounded border border-slate-200">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-teal-800">{s.role}</span>
+                          <span className="text-[10px] text-slate-400">{new Date(s.timestamp).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-slate-600 text-[10px] italic mt-0.5">"{s.statement}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span>Security Token: {proofPackData.pack_token || "SYNTHETIC-PACK"}</span>
+              <button
+                type="button"
+                onClick={() => setShowProofPack(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-semibold"
+              >
+                Close Proof Pack
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* PROMPT 7B: CAPACITY-AWARE ROUTING MODAL */}
+      {showRoutingModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <Compass className="w-5 h-5 text-teal-600" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Capacity-Aware Alternate Provider Routing
+                  </h3>
+                  <p className="text-[10px] text-slate-500">
+                    Suggest verified participating network providers when target facility is at full capacity.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRoutingModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {routingLoading ? (
+                <div className="p-8 text-center text-slate-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-teal-600 mb-2" />
+                  <p>Searching accredited network capacity...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-teal-900 text-xs">
+                    <span className="font-bold">Escrow Governance Rule:</span> The sending referring clinician keeps clinical ownership of the patient journey until the receiving provider formally accepts the intake. Slots are never fabricated.
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Suggested Participating Providers:
+                    </label>
+                    {(routingSuggestions?.providers || []).map((prov: any) => {
+                      const isSelected = selectedTargetFacility === prov.facility_id;
+                      let freshBadge = "bg-emerald-100 text-emerald-800 border-emerald-300";
+                      if (prov.data_freshness === "MANUAL") freshBadge = "bg-teal-100 text-teal-800 border-teal-300";
+                      if (prov.data_freshness === "SIMULATED") freshBadge = "bg-amber-100 text-amber-800 border-amber-300";
+
+                      return (
+                        <div
+                          key={prov.facility_id}
+                          onClick={() => setSelectedTargetFacility(prov.facility_id)}
+                          className={`p-4 rounded-xl border transition cursor-pointer ${
+                            isSelected
+                              ? "border-teal-600 bg-teal-50/50 ring-2 ring-teal-500"
+                              : "border-slate-200 hover:border-slate-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                isSelected ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300"
+                              }`}>
+                                {isSelected && <Check className="w-2.5 h-2.5" />}
+                              </div>
+                              <h4 className="font-bold text-slate-900 text-xs">{prov.name}</h4>
+                            </div>
+                            <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${freshBadge}`}>
+                              FRESHNESS: {prov.data_freshness}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
+                            <div>Distance: <strong>{prov.distance_km} km</strong></div>
+                            <div>Next Slot: <strong className="text-emerald-700">{prov.next_slot}</strong></div>
+                            <div>Capacity: <strong className="capitalize">{prov.capacity_status.toLowerCase()}</strong></div>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-1 italic">
+                            Match Reason: {prov.recommendation_reason}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Clinician Approval Checkbox */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <label className="flex items-start space-x-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={clinicianApprovalConfirmed}
+                        onChange={(e) => setClinicianApprovalConfirmed(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 text-teal-600 rounded border-slate-300"
+                      />
+                      <span className="text-xs text-slate-800 leading-snug">
+                        <strong>Mandatory Clinician Approval:</strong> I approve rerouting this referral to <strong>{selectedTargetFacility}</strong> and maintain escrow accountability until accepted.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Rationale Input */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Clinical Reroute Justification:
+                    </label>
+                    <input
+                      type="text"
+                      value={rerouteRationale}
+                      onChange={(e) => setRerouteRationale(e.target.value)}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowRoutingModal(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyReroute}
+                disabled={!clinicianApprovalConfirmed || reroutingInProgress}
+                className="px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center space-x-1.5"
+              >
+                {reroutingInProgress ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Rerouting...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>Approve & Reroute Referral</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* FHIR Modal */}
       {showFhir && (

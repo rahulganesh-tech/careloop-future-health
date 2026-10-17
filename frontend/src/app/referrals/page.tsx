@@ -19,7 +19,9 @@ import {
   FileQuestion,
   RotateCcw,
   ShieldCheck,
-  Check
+  Check,
+  Compass,
+  CheckSquare
 } from "lucide-react";
 
 export default function ReferralsPage() {
@@ -34,6 +36,57 @@ export default function ReferralsPage() {
   const [selectedRef, setSelectedRef] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState<string>("Missing HbA1c lab verification within 30 days");
   const [showRejectModal, setShowRejectModal] = useState(false);
+
+  // Capacity-Aware Routing modal
+  const [showRoutingModal, setShowRoutingModal] = useState(false);
+  const [routingSuggestions, setRoutingSuggestions] = useState<any>(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [selectedTargetFacility, setSelectedTargetFacility] = useState<string>("CCAD");
+  const [rerouteRationale, setRerouteRationale] = useState<string>("Specialist capacity exceeded at original facility; alternate network routing requested.");
+  const [clinicianApprovalConfirmed, setClinicianApprovalConfirmed] = useState(false);
+  const [reroutingInProgress, setReroutingInProgress] = useState(false);
+
+  const handleOpenAlternateRouting = async (ref: any) => {
+    setSelectedRef(ref);
+    setShowRoutingModal(true);
+    setRoutingLoading(true);
+    setErrorMsg(null);
+    setClinicianApprovalConfirmed(false);
+    try {
+      const data = await api.getCapacityRoutingSuggestions(ref.case_id, "Endocrinology");
+      setRoutingSuggestions(data);
+      if (data.providers && data.providers.length > 0) {
+        setSelectedTargetFacility(data.providers[0].facility_id);
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to fetch routing suggestions.");
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
+
+  const handleConfirmReroute = async () => {
+    if (!clinicianApprovalConfirmed || !selectedRef) {
+      setErrorMsg("Clinician approval is required to reroute referral.");
+      return;
+    }
+    setReroutingInProgress(true);
+    setErrorMsg(null);
+    try {
+      await api.applyCapacityReroute({
+        case_id: selectedRef.case_id,
+        target_facility: selectedTargetFacility,
+        rationale: rerouteRationale
+      });
+      setSuccessMsg(`Referral ${selectedRef.id} successfully rerouted to ${selectedTargetFacility}. Sender escrow preserved.`);
+      setShowRoutingModal(false);
+      await loadReferrals();
+    } catch (err: any) {
+      setErrorMsg(err.message || "Failed to reroute referral.");
+    } finally {
+      setReroutingInProgress(false);
+    }
+  };
 
   useEffect(() => {
     setCurrentUser(getCurrentUser());
@@ -274,14 +327,24 @@ export default function ReferralsPage() {
                         )}
 
                         {isRejected && (
-                          <button
-                            onClick={() => handleResubmit(ref.id)}
-                            disabled={actionLoading}
-                            className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-1 transition disabled:opacity-50"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Resubmit to Specialist</span>
-                          </button>
+                          <>
+                            <button
+                              onClick={() => handleResubmit(ref.id)}
+                              disabled={actionLoading}
+                              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-1 transition disabled:opacity-50"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Resubmit to Specialist</span>
+                            </button>
+                            <button
+                              onClick={() => handleOpenAlternateRouting(ref)}
+                              disabled={actionLoading}
+                              className="px-3 py-1.5 bg-teal-700 hover:bg-teal-800 text-white rounded-lg text-xs font-semibold shadow-sm flex items-center space-x-1 transition"
+                            >
+                              <Compass className="w-3.5 h-3.5" />
+                              <span>Capacity-Aware Routing</span>
+                            </button>
+                          </>
                         )}
 
                         <Link
@@ -346,6 +409,151 @@ export default function ReferralsPage() {
                 className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold shadow-sm"
               >
                 {actionLoading ? "Processing..." : "Confirm Rejection"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Capacity-Aware Routing Modal */}
+      {showRoutingModal && (
+        <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="p-4 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center space-x-2">
+                <Compass className="w-5 h-5 text-teal-600" />
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">
+                    Capacity-Aware Alternate Provider Routing
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-mono">
+                    Referral #{selectedRef?.id} · Case #{selectedRef?.case_id}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRoutingModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-sm font-bold px-2 py-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 overflow-y-auto space-y-4 text-xs">
+              {routingLoading ? (
+                <div className="p-8 text-center text-slate-500">
+                  <RefreshCw className="w-6 h-6 animate-spin mx-auto text-teal-600 mb-2" />
+                  <p>Searching accredited network capacity...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="p-3 bg-teal-50 border border-teal-200 rounded-xl text-teal-900 text-xs">
+                    <span className="font-bold">Escrow Governance Rule:</span> The sending referring clinician keeps clinical ownership of the patient journey until the receiving provider formally accepts the intake. Slots are never fabricated.
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="block text-xs font-bold text-slate-700 uppercase">
+                      Suggested Participating Providers:
+                    </label>
+                    {(routingSuggestions?.providers || []).map((prov: any) => {
+                      const isSelected = selectedTargetFacility === prov.facility_id;
+                      let freshBadge = "bg-emerald-100 text-emerald-800 border-emerald-300";
+                      if (prov.data_freshness === "MANUAL") freshBadge = "bg-teal-100 text-teal-800 border-teal-300";
+                      if (prov.data_freshness === "SIMULATED") freshBadge = "bg-amber-100 text-amber-800 border-amber-300";
+
+                      return (
+                        <div
+                          key={prov.facility_id}
+                          onClick={() => setSelectedTargetFacility(prov.facility_id)}
+                          className={`p-4 rounded-xl border transition cursor-pointer ${
+                            isSelected
+                              ? "border-teal-600 bg-teal-50/50 ring-2 ring-teal-500"
+                              : "border-slate-200 hover:border-slate-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-2">
+                              <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
+                                isSelected ? "border-teal-600 bg-teal-600 text-white" : "border-slate-300"
+                              }`}>
+                                {isSelected && <Check className="w-2.5 h-2.5" />}
+                              </div>
+                              <h4 className="font-bold text-slate-900 text-xs">{prov.name}</h4>
+                            </div>
+                            <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border ${freshBadge}`}>
+                              FRESHNESS: {prov.data_freshness}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-slate-100 text-[11px] text-slate-600">
+                            <div>Distance: <strong>{prov.distance_km} km</strong></div>
+                            <div>Next Slot: <strong className="text-emerald-700">{prov.next_slot}</strong></div>
+                            <div>Capacity: <strong className="capitalize">{prov.capacity_status.toLowerCase()}</strong></div>
+                          </div>
+                          <div className="text-[10px] text-slate-500 mt-1 italic">
+                            Match Reason: {prov.recommendation_reason}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Clinician Approval Checkbox */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
+                    <label className="flex items-start space-x-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={clinicianApprovalConfirmed}
+                        onChange={(e) => setClinicianApprovalConfirmed(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 text-teal-600 rounded border-slate-300"
+                      />
+                      <span className="text-xs text-slate-800 leading-snug">
+                        <strong>Mandatory Clinician Approval:</strong> I approve rerouting this referral to <strong>{selectedTargetFacility}</strong> and maintain escrow accountability until accepted.
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Rationale Input */}
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
+                      Clinical Reroute Justification:
+                    </label>
+                    <input
+                      type="text"
+                      value={rerouteRationale}
+                      onChange={(e) => setRerouteRationale(e.target.value)}
+                      className="w-full text-xs border border-slate-300 rounded-lg p-2.5 bg-white"
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="p-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowRoutingModal(false)}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReroute}
+                disabled={!clinicianApprovalConfirmed || reroutingInProgress}
+                className="px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-sm transition flex items-center space-x-1.5"
+              >
+                {reroutingInProgress ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Rerouting...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    <span>Approve & Reroute Referral</span>
+                  </>
+                )}
               </button>
             </div>
           </div>
