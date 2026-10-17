@@ -1,0 +1,97 @@
+{
+  "code": "DIAB-HBA1C",
+  "name": "Diabetes Screening Protocol (HbA1c)",
+  "version": "1.0",
+  "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)",
+  "approved_at": "2026-09-01T08:00:00Z",
+  "protocol_json": {
+    "test_code": "HBA1C",
+    "unit": "%",
+    "thresholds": [
+      {
+        "min": 10.0,
+        "max": 99.9,
+        "urgency": "CRITICAL",
+        "action": "Immediate notification; patient acknowledgement due in 24 hours; clinical review in 48 hours."
+      },
+      {
+        "min": 6.5,
+        "max": 9.9,
+        "urgency": "HIGH",
+        "action": "Confirmatory venous fasting glucose / repeat HbA1c and clinical review within 14 days; specialist referral if confirmed."
+      },
+      {
+        "min": 5.7,
+        "max": 6.4,
+        "urgency": "ROUTINE",
+        "action": "Pre-diabetes lifestyle intervention and primary care follow-up within 30 days."
+      }
+    ]
+  },
+  "closure_checklist_json": [
+    {
+      "item_code": "PATIENT_ACKNOWLEDGED",
+      "name": "Patient Result Acknowledgement",
+      "description": "Patient has confirmed receipt and passed teach-back verification.",
+      "required": true,
+      "owner_role": "COORD"
+    },
+    {
+      "item_code": "CONFIRMATORY_RESULT_OR_RATIONALE",
+      "name": "Confirmatory Test or Clinical Rationale",
+      "description": "Second confirmatory lab result logged or clinician documented rationale for proceeding without repeat.",
+      "required": true,
+      "owner_role": "GP"
+    },
+    {
+      "item_code": "REFERRAL_ACCEPTED_IF_REFERRED",
+      "name": "Specialist Referral Acceptance (If Applicable)",
+      "description": "Referral confirmed and accepted by receiving specialist without pending escrow.",
+      "required": true,
+      "owner_role": "SPEC"
+    },
+    {
+      "item_code": "OUTCOME_REPORT_RETURNED",
+      "name": "Specialist Consultation & Outcome Report",
+      "description": "Consultation summary, diagnosis confirmation, and long-term surveillance plan documented.",
+      "required": true,
+      "owner_role": "SPEC"
+    },
+    {
+      "item_code": "RECEIVER_CONFIRMATION",
+      "name": "Receiving Specialist Outcome Sign-Off",
+      "description": "Receiving clinician formal verification of completed care and discharge/management plan.",
+      "required": true,
+      "owner_role": "SPEC"
+    },
+    {
+      "item_code": "REFERRER_SIGNOFF",
+      "name": "Referring Primary Clinician Sign-Off",
+      "description": "Referring primary care provider final review and closure endorsement.",
+      "required": true,
+      "owner_role": "GP"
+    },
+    {
+      "item_code": "DISPOSITION_RECORDED",
+      "name": "Typed Case Disposition",
+      "description": "Documented formal disposition: CLINICALLY_RESOLVED, TRANSFERRED_CONFIRMED, DECLINED_AFTER_INFORMED_DISCUSSION, UNABLE_TO_CONTACT_AFTER_PROTOCOL, or OTHER_AUTHORISED.",
+      "required": true,
+      "owner_role": "GP"
+    }
+  ],
+  "sla_json": {
+    "acknowledgement_hours": {
+      "CRITICAL": 24,
+      "HIGH": 72,
+      "ROUTINE": 168
+    },
+    "clinical_review_hours": {
+      "CRITICAL": 48,
+      "HIGH": 336,
+      "ROUTINE": 720
+    },
+    "referral_response_hours": 48,
+    "appointment_service_days": 30,
+    "outcome_return_days": 14
+  }
+}

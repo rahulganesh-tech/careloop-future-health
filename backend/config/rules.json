@@ -1,0 +1,153 @@
+[
+  {
+    "id": "R-ACK-24H",
+    "name": "Critical Result Acknowledgement SLA (24h)",
+    "description": "Critical result with no patient acknowledgement within 24 hours creates an immediate coordinator call task and GP notification.",
+    "trigger_condition": {
+      "urgency": "CRITICAL",
+      "stage": "PATIENT_NOTIFIED",
+      "hours_elapsed": 24,
+      "acknowledged": false
+    },
+    "action": {
+      "type": "CREATE_TASK",
+      "kind": "CALL",
+      "assigned_role": "COORD",
+      "priority": "CRITICAL",
+      "notify_roles": ["GP"],
+      "description": "Patient with critical HbA1c not acknowledged after 24 hours. Voice call required."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-ACK-72H",
+    "name": "High Result Acknowledgement SLA (72h)",
+    "description": "High abnormal result with no patient acknowledgement within 72 hours sends a secondary reminder in preferred language, then queues a call task.",
+    "trigger_condition": {
+      "urgency": "HIGH",
+      "stage": "PATIENT_NOTIFIED",
+      "hours_elapsed": 72,
+      "acknowledged": false
+    },
+    "action": {
+      "type": "SEND_REMINDER_AND_TASK",
+      "kind": "CALL",
+      "assigned_role": "COORD",
+      "priority": "HIGH",
+      "description": "High abnormal result unacknowledged for 72 hours. Secondary reminder sent; call required."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-TB-FAIL",
+    "name": "Teach-Back Needs Assistance",
+    "description": "When teach-back responses indicate confusion or needs help, create a coordinator call task with interpreter flag.",
+    "trigger_condition": {
+      "event_type": "TEACH_BACK_NEEDS_HELP"
+    },
+    "action": {
+      "type": "CREATE_TASK",
+      "kind": "CALL",
+      "assigned_role": "COORD",
+      "flags": ["INTERPRETER_CHECK", "LANGUAGE_ASSIST"],
+      "description": "Patient requested help or struggled during teach-back verification. Coordinate direct outreach."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-REF-NORESP-48H",
+    "name": "Referral Inaction Escrow Check (48h/72h)",
+    "description": "Referral sent with no receiving specialist response within 48h reminds receiver; after 72h escalates to Programme Manager.",
+    "trigger_condition": {
+      "stage": "REFERRAL_SENT",
+      "sub_status": "SENT",
+      "hours_elapsed": 48
+    },
+    "action": {
+      "type": "ESCALATE_REFERRAL",
+      "remind_receiver_at_hours": 48,
+      "escalate_pm_at_hours": 72,
+      "description": "Referral pending specialist acceptance for over 48 hours. Escrow remains with sender."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-REF-REJECT",
+    "name": "Referral Rejection Document Checklist Return",
+    "description": "Specialist referral rejection immediately returns accountable ownership to referring GP with missing item checklist.",
+    "trigger_condition": {
+      "event_type": "REFERRAL_REJECTED"
+    },
+    "action": {
+      "type": "RETURN_TO_SENDER",
+      "assigned_role": "GP",
+      "kind": "DOCS",
+      "description": "Referral rejected by specialist. Actionable checklist returned to GP for remediation."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-NOSHOW",
+    "name": "Appointment No-Show Patient Outreach",
+    "description": "Appointment marked NO_SHOW creates immediate reschedule task and triggers patient re-engagement message.",
+    "trigger_condition": {
+      "event_type": "APPOINTMENT_NO_SHOW"
+    },
+    "action": {
+      "type": "CREATE_TASK",
+      "kind": "RESCHEDULE",
+      "assigned_role": "COORD",
+      "description": "Patient missed specialist appointment. Reschedule task created with barrier inquiry."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-OUTCOME-14D",
+    "name": "Specialist Outcome Delayed (14 Days)",
+    "description": "Specialist visit attended but clinical outcome report not returned within 14 days; triggers chase and PM alert.",
+    "trigger_condition": {
+      "stage": "APPOINTMENT_SERVICE",
+      "sub_status": "ATTENDED",
+      "days_elapsed": 14
+    },
+    "action": {
+      "type": "CHASE_RECEIVER",
+      "assigned_role": "SPEC",
+      "escalate_role": "PM",
+      "description": "Appointment attended 14 days ago without returned outcome. Chase note sent to specialist facility."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  },
+  {
+    "id": "R-CRIT-REVIEW-48H",
+    "name": "Critical Case Review Delayed (48h)",
+    "description": "Critical result without clinician review within 48 hours escalates directly to Facility Clinical Lead.",
+    "trigger_condition": {
+      "urgency": "CRITICAL",
+      "stage": "OWNER_ASSIGNED",
+      "hours_elapsed": 48
+    },
+    "action": {
+      "type": "CLINICAL_ESCALATION",
+      "escalate_to": "CLINICAL_LEAD",
+      "description": "Critical case unreviewed by referring clinician after 48 hours. Urgent safety escalation."
+    },
+    "active": true,
+    "version": "1.0",
+    "approved_by": "Dr. Sarah Al-Mansouri (Clinical Lead)"
+  }
+]
