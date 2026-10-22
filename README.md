@@ -58,6 +58,94 @@ $$\mathbf{64/100} \longrightarrow \mathbf{72/100} \longrightarrow \mathbf{76/100
 
 ---
 
+## ☁️ Microsoft Tools & Technologies Stack
+
+HealthPulse AI CareLoop is built ground-up on the **Microsoft Cloud for Healthcare** and **Azure AI** ecosystem, engineered to comply with the **Department of Health - Abu Dhabi** digital standards, **ADHICS v2**, and UAE national health data residency mandates (`DATA_RESIDENCY=UAE`).
+
+```
+                               ┌────────────────────────────────────────────────────────┐
+                               │           Microsoft Entra ID (IAM & RBAC)              │
+                               └──────────────────────────┬─────────────────────────────┘
+                                                          │
+┌───────────────────────────────┐        ┌────────────────┴───────────────┐        ┌──────────────────────────────┐
+│       Frontend (Next.js)      │        │        Backend (FastAPI)       │        │   Microsoft Fabric / PowerBI │
+│   Azure Container Apps / CDN  │◄──────►│   Azure Container Apps (AKS)   │◄──────►│  Population Health & Equity  │
+└───────────────────────────────┘        └────────────────┬───────────────┘        └──────────────────────────────┘
+                                                          │
+               ┌──────────────────────────────────────────┼──────────────────────────────────────────┐
+               ▼                                          ▼                                          ▼
+┌──────────────────────────────┐        ┌──────────────────────────────────┐       ┌──────────────────────────────┐
+│       Azure AI Services      │        │    Azure Health Data Services    │       │     Azure Flexible Data      │
+│ • Azure OpenAI (GPT-4o-mini) │        │ • FHIR Service (HL7 FHIR R4)     │       │ • Azure Database PostgreSQL  │
+│ • Azure AI Speech (uaenorth) │        │ • Malaffi HIE Bundles            │       │ • RLS & Cryptographic Ledger │
+│ • Azure AI Content Safety    │        │ • Escrow QR Receipt Tokens       │       │ • Azure Key Vault (HSM Keys) │
+│ • Azure AI Search (Cognitive)│        └──────────────────────────────────┘       └──────────────────────────────┘
+└──────────────────────────────┘
+```
+
+### 1. Azure OpenAI Service & Azure AI Foundry
+- **Clinical Model**: `gpt-4o-mini` / `gpt-4o` provisioned in Azure AI Studio.
+- **Teach-Back Comprehension Engine**: Translates complex lab findings (e.g., elevated HbA1c 11.2%, pre-diabetes) into culturally adapted, low-health-literacy questions in Emirati Arabic, English, and Hindi. Verifies patient understanding without clinical jargon.
+- **Clinical Review Assistance**: Synthesizes consult summaries and referral histories for receiving endocrinologists and care navigators while enforcing mandatory human-in-the-loop sign-off.
+- **Resilient Offline Fallback**: Governed by the `AI_ENABLED=false` configuration switch. If cloud AI endpoints are unreachable, CareLoop seamlessly and deterministically falls back to pre-certified clinical rule templates with zero interruption to patient routing.
+
+### 2. Azure Health Data Services (FHIR Service)
+- **Malaffi HIE Interoperability**: Built on native HL7 FHIR R4 specifications for full bi-directional integration with Abu Dhabi’s Malaffi Health Information Exchange.
+- **FHIR R4 Bundle Generator**: Standardized `/fhir/Bundle/{case_id}` endpoints export complete patient journey capsules enclosing `Patient`, `Task` (escrow handoff tracking), `ServiceRequest`, `DiagnosticReport`, and `Encounter` resources.
+- **Escrow Handoff Protocols**: Referral states correspond to FHIR `Task.status` transitions (`requested` $\rightarrow$ `received` $\rightarrow$ `accepted` $\rightarrow$ `completed`), ensuring zero unowned handoffs between primary care and specialist facilities.
+
+### 3. Azure AI Speech & Multimodal Delivery
+- **UAE North Datacenter (`uaenorth`)**: Speech synthesis and recognition hosted locally in Abu Dhabi / Dubai for sovereign latency and data residency compliance.
+- **App-Free Voice & Audio Routing**: Delivers interactive voice messages and audio playback of screening results for elderly or low-literacy patients who cannot use smartphone apps.
+- **Localized Dialects**: Acoustic models tailored for Gulf Arabic (Emirati dialect) and English.
+
+### 4. Azure AI Content Safety
+- **Medical Communication Guardrails**: Automated real-time scanning of all outbound patient messages and navigator callback notes.
+- **Harm & Hallucination Prevention**: Blocks unvetted medical advice, self-harm references, and toxic phrasing before message transmission across WhatsApp, SMS, or Voice channels.
+
+### 5. Azure AI Search (Cognitive Search)
+- **Clinical Pathway Indexing**: Semantic vector search across Department of Health Abu Dhabi screening pathways, clinical escalation criteria, and diagnostic guidelines.
+- **Barrier Resolution Knowledge Base**: Enables Care Navigators to instantly query vetted local interventions for reported social determinants of health (SDOH), including transportation assistance, mobile clinic routing, and language support.
+
+### 6. Azure Database for PostgreSQL (Flexible Server) & Azure Key Vault
+- **UAE Sovereign Data Residency**: Fully isolated in **Azure UAE North**, satisfying UAE Federal Health Data Law and ADHICS v2 requirements.
+- **Row-Level Security (RLS)**: Enforces role-based database policies ensuring clinicians only view assigned patients and preventing non-clinical administrators from reading Protected Health Information (PHI).
+- **Cryptographic Audit Ledger**: Database triggers and SHA-256 hash chaining guarantee tamper-evident preservation of every clinical state transition.
+- **Azure Key Vault**: Hardware Security Module (HSM)-backed custody of JWT encryption keys, database credentials, and one-time password (OTP) seed secrets.
+
+### 7. Microsoft Entra ID (Azure Active Directory) & Role-Based Access Control
+- **Healthcare IAM**: Enterprise identity management supporting clinical role separation across GP, Endocrinologist, Care Navigator, Program Manager, Community Health Worker (CHW), Compliance Auditor, and IT Administrator.
+- **Segregation of Duties**: Enforces multi-factor authentication (MFA with OTP challenge), 15-minute token TTL, and cryptographically blocks the same user identity from executing dual GP/Navigator sign-offs.
+
+### 8. Microsoft Fabric & Power BI Embedded
+- **Population Health Intelligence**: Live operational dashboards tracking cohort conversion funnels, screening-to-consult drop-offs, and facility capacity bottlenecks.
+- **Explainable Loop Integrity Telemetry**: Live computation and auditing of the 5-rule arithmetic Loop Integrity Score ($64 \rightarrow 72 \rightarrow 76 \rightarrow 78$).
+- **Health Equity & Barrier Analytics**: Disaggregated barrier frequency, resolution rate, and median resolution times by facility and demographic cohort.
+
+### 9. Microsoft Developer Ecosystem & DevOps
+- **GitHub Actions**: Continuous integration pipeline running 16 automated pytest verification suites on every pull request.
+- **Visual Studio Code & Dev Containers**: Standardized, reproducible development container environments for Python 3.10+ and Node.js 18+.
+
+---
+
+### 📋 Microsoft Tools & Architecture Matrix
+
+| CareLoop Module | Microsoft / Azure Technology | Configuration / Region | Clinical / Regulatory Purpose |
+| :--- | :--- | :--- | :--- |
+| **Patient Teach-Back & Translation** | Azure OpenAI Service (`gpt-4o-mini`) | Azure AI Project Endpoint | Multilingual patient comprehension in Arabic/English/Hindi |
+| **HIE Interoperability** | Azure Health Data Services (FHIR) | HL7 FHIR R4 Service | Malaffi HIE export (`Task`, `ServiceRequest`, `DiagnosticReport`) |
+| **Voice Channel & IVR** | Azure AI Speech | `uaenorth` (Abu Dhabi) | App-free voice access for elderly and low-literacy patients |
+| **Message Guardrails** | Azure AI Content Safety | Azure Content Safety Endpoint | Zero medical misinformation or unverified clinical guidance |
+| **Clinical Guidelines Retrieval** | Azure AI Search (Cognitive Search) | Azure Search Endpoint | Semantic indexing of DoH Abu Dhabi clinical screening pathways |
+| **Transactional Database** | Azure Database for PostgreSQL | UAE North (Flexible Server) | Sovereign storage, RLS policies, and SHA-256 audit triggers |
+| **Secrets Management** | Azure Key Vault | FIPS 140-2 Level 3 HSM | Zero hardcoded keys, rotation of JWT secrets & OTP seeds |
+| **Identity & Access Control** | Microsoft Entra ID (Azure AD) | Enterprise IAM & MFA | Strict ADHICS v2 role separation and dual sign-off enforcement |
+| **Population Health Analytics** | Microsoft Fabric & Power BI | Power BI Embedded | Real-time Loop Integrity Score telemetry and equity tracking |
+| **Application Hosting** | Azure Container Apps / AKS | Managed Microservices | Zero-trust container networking for FastAPI & Next.js |
+| **CI/CD & Source Control** | GitHub & GitHub Actions | GitHub Enterprise / Cloud | 16-point automated verification testing on every commit |
+
+---
+
 ## 👥 Demo Personas & Logins
 All accounts use password: `demo123` · Demo OTP: `482913`
 
@@ -89,7 +177,7 @@ python -m venv venv
 # Seed database with baseline (Score 64/100)
 ./venv/Scripts/python seed_data.py
 
-# Run test suite (9 tests, 100% pass)
+# Run test suite (16 tests, 100% pass)
 ./venv/Scripts/pytest -v tests/test_careloop.py
 
 # Start FastAPI server
@@ -111,20 +199,31 @@ Application interface will be live at: `http://localhost:3000`
 ---
 
 ## 🧪 Automated Pytest Test Suite
-The backend contains 9 comprehensive tests verifying every architectural requirement:
+The backend contains **16 comprehensive automated verification tests** verifying every architectural and regulatory invariant (100% pass rate):
+
+### Core Architecture & State Machine (Tests 1–9)
 1. `test_login_and_otp_flow`: Validates 2-step OTP, password verification, 401 rejection on wrong credentials.
-2. `test_role_authorization_admin_forbidden_clinical`: Proves ADMIN is strictly forbidden from clinical review (returns HTTP 403).
-3. `test_case_state_machine_invalid_transition`: Enforces transition prerequisites (HTTP 409 conflict when booking appointment before referral is accepted).
-4. `test_referral_escrow_ownership_transfer`: Confirms GP retains escrow responsibility until specialist accepts, and regains it if rejected.
-5. `test_closure_gate_requires_evidence`: Blocks case closure if checklist items are incomplete.
-6. `test_closure_gate_requires_dual_signoff`: Rejects sign-off if the same user attempts to sign both GP and Coordinator roles.
-7. `test_cryptographic_audit_chain_tamper_detection`: Injects synthetic database tampering and proves the auditor detects the exact corrupted row.
-8. `test_score_calculator_deterministic_progression`: Validates the exact score sequence ($64 \rightarrow 72 \rightarrow 76 \rightarrow 78$).
-9. `test_fhir_r4_bundle_export`: Validates FHIR bundle structure, `Task.owner`, and `Task.status` consistency.
+2. `test_role_authorization`: Proves ADMIN is strictly forbidden from clinical review (returns HTTP 403).
+3. `test_state_machine_and_referral_conflict_409`: Enforces transition prerequisites (HTTP 409 conflict when booking appointment before referral is accepted).
+4. `test_ownership_escrow`: Confirms GP retains escrow responsibility until specialist accepts, and regains it if rejected.
+5. `test_evidence_gate_blocks_closure`: Blocks case closure if checklist items are incomplete.
+6. `test_dual_signoff_rejection_for_same_user`: Rejects sign-off if the same user attempts to sign both GP and Coordinator roles.
+7. `test_audit_log_cryptographic_verification`: Injects synthetic database tampering and proves the auditor detects the exact corrupted row via SHA-256 chain verification.
+8. `test_demo_journey_score_progression_64_72_76_78`: Validates the exact score sequence ($64 \rightarrow 72 \rightarrow 76 \rightarrow 78$).
+9. `test_fhir_care_capsule_bundle`: Validates FHIR R4 bundle structure, `Task.owner`, and `Task.status` consistency for Malaffi HIE readiness.
+
+### Prompt 7B Advanced Capabilities (Tests 10–16)
+10. `test_recovery_simulator_never_changes_case_state`: Verifies simulation sandbox cannot alter real clinical case attributes.
+11. `test_recovery_simulator_deterministic_reproducibility`: Confirms identical inputs yield identical simulation projections without ML hallucination.
+12. `test_recovery_simulator_apply_requires_approval_and_links_task`: Verifies clinician approval is required to convert a simulated recommendation into a real operational Task.
+13. `test_patient_journey_proof_pack_matches_timeline_and_audit`: Verifies comprehensive journey timeline, provenance tracking, and cryptographic audit seal.
+14. `test_capacity_routing_preserves_owner`: Confirms capacity-aware provider rerouting maintains referring GP escrow responsibility.
+15. `test_barrier_analytics_reconciles_and_shows_denominators`: Verifies disaggregated barrier resolution rates, low-sample warnings ($n < 10$), and non-causal disclaimers.
+16. `test_kpi_metrics_show_denominators_and_value_types`: Confirms all population health KPIs display explicit denominators and value type badges (`ACTUAL`, `TARGET`, `ESTIMATED`).
 
 Run tests anytime with:
 ```bash
-pytest backend/tests/test_careloop.py -v
+backend/venv/Scripts/pytest backend/tests/test_careloop.py -v
 ```
 
 ---
@@ -132,7 +231,8 @@ pytest backend/tests/test_careloop.py -v
 ## 🏛️ Standards Alignment
 - **ADHICS v2 (Abu Dhabi Healthcare Information and Cyber Security Standard)**: Role separation, cryptographic audit trail, and database triggers.
 - **DoH Abu Dhabi AI & Health Data Policies**: Deterministic explainable scoring, human-in-the-loop closure invariants, synthetic data isolation.
-- **Malaffi HIE Readiness**: FHIR R4 Bundles (`Task`, `ServiceRequest`, `DiagnosticReport`), portable QR escrow receipts.
+- **Malaffi HIE Readiness**: FHIR R4 Bundles (`Task`, `ServiceRequest`, `DiagnosticReport`), portable QR escrow receipts via Azure Health Data Services.
+- **UAE Health Data Residency**: 100% cloud architecture localized to Microsoft Azure UAE North (Abu Dhabi) region.
 
 ---
 

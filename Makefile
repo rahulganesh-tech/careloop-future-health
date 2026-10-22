@@ -5,7 +5,7 @@ help:
 	@echo "Available commands:"
 	@echo "  make install      - Install backend and frontend dependencies"
 	@echo "  make seed         - Re-seed database with exact baseline (Score: 64/100)"
-	@echo "  make test         - Run 9 automated verification tests via pytest"
+	@echo "  make test         - Run 16 automated verification tests via pytest"
 	@echo "  make run-backend  - Start FastAPI backend server on :8000"
 	@echo "  make run-frontend - Start Next.js frontend dev server on :3000"
 	@echo "  make dev          - Run both backend and frontend"
