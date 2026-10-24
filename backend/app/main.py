@@ -7,6 +7,11 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.db.init_db import init_db
 from app.services.rules_engine import load_rules_from_disk
+from app.models.entities import User
+try:
+    from seed_data import seed
+except ImportError:
+    from backend.seed_data import seed
 
 # Import routers
 from app.api.auth import router as auth_router, patient_router as patient_auth_router
@@ -41,11 +46,20 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     db = SessionLocal()
+    should_seed = False
     try:
         init_db(db)
         load_rules_from_disk(db)
+        try:
+            if db.query(User).count() == 0:
+                should_seed = True
+        except Exception:
+            should_seed = True
     finally:
         db.close()
+
+    if should_seed:
+        seed()
 
 # Include Routers
 app.include_router(auth_router)
