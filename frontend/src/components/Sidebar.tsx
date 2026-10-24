@@ -23,7 +23,7 @@ import {
   UserCheck,
   Zap
 } from "lucide-react";
-import { getCurrentUser, removeToken, setToken, setCurrentUser } from "@/lib/api";
+import { getCurrentUser, removeToken, setToken, setCurrentUser, API_BASE_URL } from "@/lib/api";
 
 const DEMO_ACCOUNTS = [
   { role: "PM", email: "pm@careloop.demo", name: "Noura Al-Zaabi", title: "Programme Manager" },
@@ -58,7 +58,7 @@ export function Sidebar() {
 
   const handleQuickSwitch = async (acc: typeof DEMO_ACCOUNTS[0]) => {
     try {
-      const res = await fetch("http://localhost:8000/auth/otp", {
+      const res = await fetch(`${API_BASE_URL}/auth/otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: acc.email, otp_code: "482913" })

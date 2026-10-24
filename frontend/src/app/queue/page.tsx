@@ -17,7 +17,7 @@ import {
   XCircle,
   Check
 } from "lucide-react";
-import { api } from "@/lib/api";
+import { api, API_BASE_URL } from "@/lib/api";
 
 export default function QueuePage() {
   const [items, setItems] = useState<any[]>([]);
@@ -73,7 +73,7 @@ export default function QueuePage() {
 
       // 3. Complete acknowledgement
       // Create patient token or call direct ack
-      await fetch(`http://localhost:8000/cases/${caseId}/assign`, {
+      await fetch(`${API_BASE_URL}/cases/${caseId}/assign`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

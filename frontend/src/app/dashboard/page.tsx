@@ -41,13 +41,17 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadData();
-    // Connect to WebSocket /ws/live for dynamic updates
+    // Connect to WebSocket /api/ws/live for dynamic updates
     let ws: WebSocket;
     try {
-      ws = new WebSocket("ws://localhost:8000/ws/live");
-      ws.onmessage = () => {
-        loadData();
-      };
+      if (typeof window !== "undefined") {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        const wsUrl = `${protocol}//${window.location.host}/api/ws/live`;
+        ws = new WebSocket(wsUrl);
+        ws.onmessage = () => {
+          loadData();
+        };
+      }
     } catch {
       // WebSocket optional
     }
